@@ -1,17 +1,36 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { configureGlobalFetchProxy } from './common/network';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  configureGlobalFetchProxy();
+
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe());
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
-  
+
+  const resourceBaseDir = process.env.RESOURCE_BASE_DIR || 'E:\\兼职\\svgs-download\\py';
+  app.useStaticAssets(resourceBaseDir, {
+    prefix: '/resources/',
+    setHeaders: (res) => {
+      res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+      res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', '*');
+    },
+  });
+
+  app.enableCors({
+    origin: 'http://localhost:5173',
+    credentials: false,
+  });
+
   await app.listen(process.env.PORT ?? 3000);
+  console.log('Application is running on http://localhost:3000');
 }
 bootstrap();

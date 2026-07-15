@@ -26,6 +26,9 @@ export class User {
   @Column({ nullable: true })
   avatar: string;
 
+  @Column({ type: 'int', default: 0 })
+  pointsBalance: number;
+
   @Column({ type: 'timestamp', default: () => 'CURRENT_TIMESTAMP' })
   createdAt: Date;
 

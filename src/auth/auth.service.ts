@@ -29,6 +29,7 @@ export class AuthService {
         email: user.email,
         nickname: user.nickname,
         avatar: user.avatar,
+        pointsBalance: user.pointsBalance || 0,
       },
     };
   }

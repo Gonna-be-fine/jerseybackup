@@ -5,6 +5,9 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
+import { ResourcesModule } from './resources/resources.module';
+import { PointsModule } from './points/points.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -29,6 +32,9 @@ import { AuthModule } from './auth/auth.module';
     }),
     UsersModule,
     AuthModule,
+    ResourcesModule,
+    PointsModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [AppService],
