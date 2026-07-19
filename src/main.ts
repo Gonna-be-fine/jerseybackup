@@ -15,18 +15,19 @@ async function bootstrap() {
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
 
+  const corsOrigin = process.env.CORS_ORIGIN || 'http://localhost:5173';
   const resourceBaseDir = process.env.RESOURCE_BASE_DIR || 'E:\\兼职\\svgs-download\\py';
   app.useStaticAssets(resourceBaseDir, {
     prefix: '/resources/',
     setHeaders: (res) => {
-      res.setHeader('Access-Control-Allow-Origin', 'http://localhost:5173');
+      res.setHeader('Access-Control-Allow-Origin', corsOrigin);
       res.setHeader('Access-Control-Allow-Methods', 'GET,HEAD,OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', '*');
     },
   });
 
   app.enableCors({
-    origin: 'http://localhost:5173',
+    origin: corsOrigin,
     credentials: false,
   });
 
