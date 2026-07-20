@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { Repository } from 'typeorm';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { PointsService } from '../points/points.service';
 import { ResourcesService } from '../resources/resources.service';
 import { AiDesignDto } from './dto/ai-design.dto';
@@ -20,7 +21,17 @@ const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash-lit
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
 const GEMINI_API_BASE =
   process.env.GEMINI_API_BASE || 'https://generativelanguage.googleapis.com/v1beta';
+const GEMINI_PROXY_URL =
+  process.env.GEMINI_PROXY_URL ||
+  process.env.HTTPS_PROXY ||
+  process.env.HTTP_PROXY ||
+  process.env.https_proxy ||
+  process.env.http_proxy;
 const AI_IMAGE_DEBUG_DIR = process.env.AI_IMAGE_DEBUG_DIR || 'debug-ai-images';
+
+if (GEMINI_PROXY_URL) {
+  setGlobalDispatcher(new ProxyAgent(GEMINI_PROXY_URL));
+}
 
 const DESIGN_RESPONSE_SCHEMA = {
   type: 'object',
