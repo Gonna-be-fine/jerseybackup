@@ -24,6 +24,25 @@ export class ResourcesService {
     const queryBuilder = this.resourceRepository
       .createQueryBuilder('resource')
       .leftJoinAndSelect('resource.category', 'category')
+      .select([
+        'resource.id',
+        'resource.name',
+        'resource.slug',
+        'resource.categoryId',
+        'resource.fileName',
+        'resource.relativePath',
+        'resource.hasPng',
+        'resource.tags',
+        'resource.sortOrder',
+        'resource.isActive',
+        'resource.createdAt',
+        'resource.updatedAt',
+        'category.id',
+        'category.name',
+        'category.slug',
+        'category.folderName',
+        'category.resourceCount',
+      ])
       .where('resource.isActive = :isActive', { isActive: true });
 
     // 按类别筛选
@@ -110,6 +129,27 @@ export class ResourcesService {
     const category = await this.findCategoryBySlug(categorySlug);
     
     const [items, total] = await this.resourceRepository.findAndCount({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        categoryId: true,
+        fileName: true,
+        relativePath: true,
+        hasPng: true,
+        tags: true,
+        sortOrder: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+          folderName: true,
+          resourceCount: true,
+        },
+      },
       where: { categoryId: category.id, isActive: true },
       relations: ['category'],
       order: { name: 'ASC' },
@@ -129,6 +169,27 @@ export class ResourcesService {
 
   async searchResources(query: string, page = 1, limit = 40) {
     const [items, total] = await this.resourceRepository.findAndCount({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        categoryId: true,
+        fileName: true,
+        relativePath: true,
+        hasPng: true,
+        tags: true,
+        sortOrder: true,
+        isActive: true,
+        createdAt: true,
+        updatedAt: true,
+        category: {
+          id: true,
+          name: true,
+          slug: true,
+          folderName: true,
+          resourceCount: true,
+        },
+      },
       where: [
         { name: Like(`%${query}%`), isActive: true },
         { tags: Like(`%${query}%`), isActive: true },
