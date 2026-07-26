@@ -12,10 +12,10 @@ import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
 import { AiTask } from './entities/ai-task.entity';
 
 const AI_COSTS = {
-  design: 5,
-  logo: 15,
+  design: 8,
+  logo: 16,
   modelPreview: 25,
-};
+}; 
 
 const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash-lite';
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL || 'gemini-2.5-flash-image';
