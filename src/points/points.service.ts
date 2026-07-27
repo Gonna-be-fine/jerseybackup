@@ -184,6 +184,36 @@ export class PointsService {
     });
   }
 
+  async addPointsByEmail(email: string, amount: number, remark = 'Admin manual recharge') {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.usersRepository.findOne({
+      where: { email: normalizedEmail },
+    });
+
+    if (!user) {
+      throw new BadRequestException('User email does not exist');
+    }
+
+    const bizId = `ADMIN${Date.now()}`;
+    const result = await this.changePoints(user.id, {
+      type: 'admin_adjust',
+      amount,
+      bizType: 'admin_manual_recharge',
+      bizId,
+      remark,
+    });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+      },
+      pointsBalance: result.pointsBalance,
+      transaction: result.transaction,
+    };
+  }
+
   async consumePoints(
     userId: number,
     amount: number,

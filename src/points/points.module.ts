@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '../users/entities/user.entity';
+import { AdminPointsController } from './admin-points.controller';
 import { PointTransaction } from './entities/point-transaction.entity';
 import { RechargeOrder } from './entities/recharge-order.entity';
 import { PointsController } from './points.controller';
@@ -8,7 +9,7 @@ import { PointsService } from './points.service';
 
 @Module({
   imports: [TypeOrmModule.forFeature([User, PointTransaction, RechargeOrder])],
-  controllers: [PointsController],
+  controllers: [PointsController, AdminPointsController],
   providers: [PointsService],
   exports: [PointsService],
 })
