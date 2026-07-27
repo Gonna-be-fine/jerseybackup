@@ -1,7 +1,8 @@
-import { Controller, Post, Body, UseGuards, Req, Get, Query, Request } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Request } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { EmailRegisterDto } from './dto/email-register.dto';
 import { EmailLoginDto } from './dto/email-login.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @Controller('users')
@@ -19,14 +20,15 @@ export class UsersController {
     return this.usersService.registerWithEmail(registerDto);
   }
 
+  @Post('email/reset-password')
+  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto) {
+    await this.usersService.resetPassword(resetPasswordDto);
+    return { message: '密码重置成功' };
+  }
+
   @Post('login/email')
   async loginWithEmail(@Body() loginDto: EmailLoginDto) {
     return this.usersService.loginWithEmail(loginDto);
-  }
-
-  @Get('login/wechat')
-  async loginWithWechat(@Query('code') code: string) {
-    return this.usersService.loginWithWechat(code);
   }
 
   @UseGuards(JwtAuthGuard)

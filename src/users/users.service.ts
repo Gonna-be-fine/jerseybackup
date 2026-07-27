@@ -4,6 +4,7 @@ import { Repository, MoreThan } from 'typeorm';
 import { User } from './entities/user.entity';
 import { EmailVerification } from './entities/email-verification.entity';
 import { EmailRegisterDto } from './dto/email-register.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
 import * as bcrypt from 'bcryptjs';
 import * as nodemailer from 'nodemailer';
 import { EmailLoginDto } from './dto/email-login.dto';
@@ -89,6 +90,22 @@ export class UsersService {
     return user;
   }
 
+  async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    const user = await this.usersRepository.findOne({
+      where: { email: resetPasswordDto.email },
+    });
+
+    if (!user) {
+      throw new BadRequestException('用户不存在');
+    }
+
+    user.password = await bcrypt.hash(resetPasswordDto.password, 10);
+    user.emailVerified = true;
+    await this.usersRepository.save(user);
+
+    return { message: '密码重置成功' };
+  }
+
   async bindWechat(userId: number, wechatData: { openId: string; unionId: string }) {
     const user = await this.usersRepository.findOne({ where: { id: userId } });
     if (!user) {
@@ -122,59 +139,4 @@ export class UsersService {
     return this.authService.generateToken(user);
   }
 
-  async loginWithWechat(code: string) {
-    // 1. 通过 code 获取微信的 access_token
-    const wxResponse = await this.getWechatToken(code);
-    
-    // 2. 获取用户信息
-    const userInfo = await this.getWechatUserInfo(wxResponse.access_token, wxResponse.openid);
-    
-    // 3. 查找或创建用户
-    let user = await this.usersRepository.findOne({
-      where: [
-        { wechatOpenId: userInfo.openid },
-        { wechatUnionId: userInfo.unionid }
-      ]
-    });
-
-    if (!user) {
-      // 创建新用户
-      user = this.usersRepository.create({
-        wechatOpenId: userInfo.openid,
-        wechatUnionId: userInfo.unionid,
-        nickname: userInfo.nickname,
-        avatar: userInfo.headimgurl,
-      });
-      await this.usersRepository.save(user);
-    }
-
-    // 修改返回值，使用 token
-    return this.authService.generateToken(user);
-  }
-
-  private async getWechatToken(code: string) {
-    const response = await fetch(
-      `https://api.weixin.qq.com/sns/oauth2/access_token?appid=${process.env.WECHAT_APP_ID}&secret=${process.env.WECHAT_APP_SECRET}&code=${code}&grant_type=authorization_code`
-    );
-    const data = await response.json();
-    
-    if (data.errcode) {
-      throw new BadRequestException('微信授权失败');
-    }
-    
-    return data;
-  }
-
-  private async getWechatUserInfo(accessToken: string, openid: string) {
-    const response = await fetch(
-      `https://api.weixin.qq.com/sns/userinfo?access_token=${accessToken}&openid=${openid}`
-    );
-    const data = await response.json();
-    
-    if (data.errcode) {
-      throw new BadRequestException('获取微信用户信息失败');
-    }
-    
-    return data;
-  }
 } 
