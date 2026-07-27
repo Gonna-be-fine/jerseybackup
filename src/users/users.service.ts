@@ -91,6 +91,10 @@ export class UsersService {
   }
 
   async resetPassword(resetPasswordDto: ResetPasswordDto) {
+    if (resetPasswordDto.captchaAnswer !== resetPasswordDto.captchaLeft + resetPasswordDto.captchaRight) {
+      throw new BadRequestException('验证问题答案不正确');
+    }
+
     const user = await this.usersRepository.findOne({
       where: { email: resetPasswordDto.email },
     });
