@@ -5,10 +5,13 @@ import { Resource } from './entities/resource.entity';
 import { ResourceCategory } from './entities/resource-category.entity';
 import { QueryResourcesDto } from './dto/query-resources.dto';
 import { ResourceScannerService } from './scanner/resource-scanner.service';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class ResourcesService {
   private readonly logger = new Logger(ResourcesService.name);
+  private readonly resourceBaseDir = process.env.RESOURCE_BASE_DIR || 'E:\\鍏艰亴\\svgs-download\\py';
 
   constructor(
     @InjectRepository(Resource)
@@ -240,10 +243,24 @@ export class ResourcesService {
 
   async getResourceContent(id: number) {
     const resource = await this.findOne(id);
+    const baseDir = path.resolve(this.resourceBaseDir);
+    const svgPath = path.resolve(baseDir, resource.relativePath);
+
+    if (!svgPath.startsWith(baseDir + path.sep)) {
+      throw new Error('Invalid resource path');
+    }
+
+    let svgContent = resource.svgContent || '';
+    try {
+      svgContent = fs.readFileSync(svgPath, 'utf-8');
+    } catch (error) {
+      this.logger.warn(`Unable to read SVG file ${resource.relativePath}: ${error.message}`);
+    }
+
     return {
       id: resource.id,
       name: resource.name,
-      svgContent: resource.svgContent,
+      svgContent,
       relativePath: resource.relativePath,
       hasPng: resource.hasPng,
       category: resource.category.name,

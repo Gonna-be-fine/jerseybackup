@@ -122,6 +122,7 @@ export class ResourceScannerService {
           fileName: svgFile,
           relativePath,
           hasPng: !!pngFile,
+          svgContent: '',
           isActive: true,
         });
       } else {
@@ -129,13 +130,6 @@ export class ResourceScannerService {
         resource.fileName = svgFile;
         resource.relativePath = relativePath;
         resource.hasPng = !!pngFile;
-      }
-
-      try {
-        const svgFilePath = path.join(categoryPath, svgFile);
-        resource.svgContent = fs.readFileSync(svgFilePath, 'utf-8');
-      } catch (error) {
-        this.logger.warn(`Unable to read SVG file ${svgFile}: ${error.message}`);
         resource.svgContent = '';
       }
 
