@@ -2,7 +2,7 @@ import { IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 
 export class AiModelPreviewDto {
   @IsString()
-  @MaxLength(500)
+  @MaxLength(4000)
   prompt: string;
 
   @IsOptional()

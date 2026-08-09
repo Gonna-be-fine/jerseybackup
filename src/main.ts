@@ -2,13 +2,19 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { json, urlencoded } from 'express';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { configureGlobalFetchProxy } from './common/network';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bodyParser: false,
+  });
   configureGlobalFetchProxy();
+
+  app.use(json({ limit: process.env.REQUEST_BODY_LIMIT || '25mb' }));
+  app.use(urlencoded({ extended: true, limit: process.env.REQUEST_BODY_LIMIT || '25mb' }));
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe());
