@@ -388,7 +388,10 @@ The JSON shape must be:
       return { accepted: true, imageUrl: null, usedGemini: false };
     }
 
-    const parts: GeminiPart[] = [{ text: dto.prompt }];
+    const prompt = `${dto.prompt}
+
+Critical icon placement rule: every logo, crest, badge, emblem, and decorative icon must stay in the exact same relative position, scale, spacing, and alignment as shown in the reference preview. Do not move icons to a different chest, sleeve, shoulder, collar, hem, or torso zone.`;
+    const parts: GeminiPart[] = [{ text: prompt }];
     this.appendDataUrlPart(parts, dto.snap3d, 'Reference Image 1: 3D WebGL Mockup');
     this.appendDataUrlPart(parts, dto.snap2d, 'Reference Image 2: 2D Layout Blueprint');
 
