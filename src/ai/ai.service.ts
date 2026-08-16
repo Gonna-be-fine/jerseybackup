@@ -49,7 +49,7 @@ const DESIGN_RESPONSE_SCHEMA = {
     colorsRationale: { type: 'string' },
     texts: {
       type: 'array',
-      minItems: 1,
+      minItems: 0,
       maxItems: 2,
       items: {
         type: 'object',
@@ -80,7 +80,7 @@ const DESIGN_RESPONSE_SCHEMA = {
     },
     decals: {
       type: 'array',
-      minItems: 2,
+      minItems: 0,
       maxItems: 3,
       items: {
         type: 'object',
@@ -104,9 +104,51 @@ const DESIGN_RESPONSE_SCHEMA = {
         ],
       },
     },
+    patterns: {
+      type: 'array',
+      minItems: 0,
+      maxItems: 2,
+      items: {
+        type: 'object',
+        properties: {
+          source: {
+            type: 'string',
+            enum: ['preset', 'generated_svg'],
+          },
+          patternId: { type: 'string' },
+          libraryKeyword: { type: 'string' },
+          brief: { type: 'string' },
+          designIdea: { type: 'string' },
+          targetMode: {
+            type: 'string',
+            enum: ['all', 'parts'],
+          },
+          targetPartIds: {
+            type: 'array',
+            items: { type: 'string' },
+          },
+          scale: { type: 'number' },
+          angle: { type: 'number' },
+          opacity: { type: 'number' },
+          patternColor: { type: 'string' },
+          bgColorMode: { type: 'string' },
+        },
+        required: [
+          'source',
+          'brief',
+          'targetMode',
+          'targetPartIds',
+          'scale',
+          'angle',
+          'opacity',
+          'patternColor',
+          'bgColorMode',
+        ],
+      },
+    },
     explanation: { type: 'string' },
   },
-  required: ['jerseyColors', 'colorsRationale', 'texts', 'decals', 'explanation'],
+  required: ['jerseyColors', 'colorsRationale', 'texts', 'decals', 'patterns', 'explanation'],
 };
 
 type GeminiPart = {
@@ -115,6 +157,32 @@ type GeminiPart = {
     data: string;
     mimeType: string;
   };
+};
+
+type DesignPatternPlan = {
+  source: 'preset' | 'generated_svg';
+  patternId?: string;
+  libraryKeyword?: string;
+  brief: string;
+  designIdea?: string;
+  targetMode: 'all' | 'parts';
+  targetPartIds: string[];
+  scale: number;
+  angle: number;
+  opacity: number;
+  patternColor?: string;
+  bgColorMode?: string;
+  url?: string | null;
+  category?: string;
+  name?: string;
+};
+
+type AvailablePatternOption = {
+  id: string;
+  name?: string;
+  category?: string;
+  keywords?: string[];
+  url?: string;
 };
 
 @Injectable()
@@ -136,7 +204,7 @@ export class AiService {
       await this.chargeForTask(userId, AI_COSTS.design, 'ai_design');
       charged = true;
 
-      const result = await this.buildDesignResult(dto.prompt, dto.generateCustomDecal);
+      const result = await this.buildDesignResult(dto);
       await this.completeTask(task, result);
 
       const balance = await this.pointsService.getBalance(userId);
@@ -262,10 +330,10 @@ export class AiService {
     await this.aiTaskRepository.save(task);
   }
 
-  private async buildDesignResult(prompt: string, generateCustomDecal?: boolean) {
-    let result: any = await this.tryBuildRealDesignResult(prompt);
+  private async buildDesignResult(dto: AiDesignDto) {
+    let result: any = await this.tryBuildRealDesignResult(dto);
     if (!result) {
-      result = await this.buildFallbackDesignResult(prompt);
+      result = await this.buildFallbackDesignResult(dto);
     }
 
     if (Array.isArray(result.decals)) {
@@ -276,7 +344,9 @@ export class AiService {
       }
     }
 
-    if (generateCustomDecal) {
+    result.patterns = await this.resolveDesignPatterns(result.patterns || [], dto);
+
+    if (dto.generateCustomDecal) {
       const primaryBadgeDecal =
         result.decals?.find((decal) => decal.role === 'primary_badge') || result.decals?.[0];
       if (primaryBadgeDecal?.imagenPrompt) {
@@ -291,17 +361,46 @@ export class AiService {
     return result;
   }
 
-  private async tryBuildRealDesignResult(prompt: string) {
+  private async tryBuildRealDesignResult(dto: AiDesignDto) {
     if (!this.hasGeminiKey()) return null;
+
+    const productType = dto.productType || 'sportswear';
+    const colorPartSummary = (dto.availableColorParts || [])
+      .map(
+        (part) =>
+          `${part.id}${part.name ? ` (${part.name})` : ''}${part.color ? ` current ${part.color}` : ''}`,
+      )
+      .join(', ');
+    const currentColorsSummary = dto.currentColors
+      ? Object.entries(dto.currentColors)
+          .map(([key, value]) => `${key}: ${value}`)
+          .join(', ')
+      : '';
+    const patternSummary = (dto.availablePatterns || [])
+      .map((pattern) => {
+        const keywords = Array.isArray(pattern.keywords) ? pattern.keywords.join('/') : '';
+        return `${pattern.id}: ${pattern.name || pattern.id}${pattern.category ? ` [${pattern.category}]` : ''}${keywords ? ` keywords(${keywords})` : ''}`;
+      })
+      .join('; ');
 
     const systemInstruction = `You are a high-end athletic sportswear fashion designer.
 Given a design intent/concept described by a client, formulate a professional "Design Catalog Sketch Proposal".
 Return strict JSON only. No markdown.
 Do not include double quote characters inside string values unless they are valid JSON escapes.
 Keep every string value short and single-line.
-You must recommend jersey colors, a Chinese colorsRationale, 1-2 typographic elements, and 2-3 decorative badge decal specifications.
+You must recommend jersey colors, a Chinese colorsRationale, 0-2 typographic elements, 0-3 decorative badge decal specifications, and 0-2 pattern specifications.
 Typography coordinates use leftRatio/topRatio from 0.1 to 0.9. Main titles usually use leftRatio 0.5 and topRatio 0.54 to 0.60. Numbers use topRatio 0.70 to 0.76.
 Fonts must be one of: American Captain, Athletic, Komikazoom, Hardsign, summber-bike.
+The garment productType is "${productType}".
+Available editable color parts: ${colorPartSummary || 'COLOUR_BASE, COLOUR_PRIMARY, COLOUR_SECONDARY, COLOUR_HEM'}.
+Current part colors: ${currentColorsSummary || 'not provided'}.
+Primary text already on garment: ${dto.primaryText || 'none'}.
+Available reusable preset patterns: ${patternSummary || 'none, AI may choose generated_svg when a custom repeat pattern is needed'}.
+Use patterns for repeating body textures such as camo, stripes, lightning textures, geometry, mesh, halftone, or subtle all-over motifs.
+Use decals for badges, mascots, crests, emblems, sponsors, and symbolic chest graphics.
+Patterns must include source, patternId when using source preset, libraryKeyword, brief, designIdea in Chinese, targetMode, targetPartIds, scale, angle, opacity, patternColor, bgColorMode.
+If a custom repeat texture is required and presets are not a good match, use source generated_svg.
+When targetMode is all, targetPartIds must be an empty array. When targetMode is parts, targetPartIds must be chosen only from available editable color parts.
 Decals must include role, libraryKeyword, designIdea in Chinese, imagenPrompt, leftRatio, topRatio, scale.
 The JSON shape must be:
 {
@@ -309,12 +408,13 @@ The JSON shape must be:
   "colorsRationale": "Chinese sentence",
   "texts": [{"text":"...","fill":"#hex","fontFamily":"...","fontSize":44,"isCurved":true,"curveValue":30,"leftRatio":0.5,"topRatio":0.54}],
   "decals": [{"role":"primary_badge","libraryKeyword":"star","designIdea":"...","imagenPrompt":"...","leftRatio":0.33,"topRatio":0.42,"scale":0.65}],
+  "patterns": [{"source":"preset","patternId":"stripes_diag","libraryKeyword":"stripes","brief":"fast diagonal stripe repeat","designIdea":"...","targetMode":"parts","targetPartIds":["COLOUR_BASE"],"scale":1.0,"angle":0,"opacity":0.28,"patternColor":"#ffffff","bgColorMode":"use_part_color"}],
   "explanation": "Chinese paragraph"
 }`;
 
     try {
       const response = await this.generateGeminiContent(GEMINI_TEXT_MODEL, [
-        { text: `${systemInstruction}\n\nDesign Request: ${prompt}` },
+        { text: `${systemInstruction}\n\nDesign Request: ${dto.prompt}` },
       ], {
         responseMimeType: 'application/json',
         responseSchema: DESIGN_RESPONSE_SCHEMA,
@@ -352,7 +452,6 @@ The JSON shape must be:
     const colorContext = dto.inheritColors
       ? `Use jersey colors: base ${dto.baseColor || '#ffffff'}, accent ${dto.accentColor || '#111111'}. `
       : '';
-
     try {
       return await this.generateSvgDataUrl(
         `${stylePrompt}Central subject is: "${dto.prompt}". ${colorContext}Modern detailed sportswear vector emblem with layered mascot/logo illustration.`,
@@ -371,7 +470,6 @@ The JSON shape must be:
     const colorContext = dto.inheritColors
       ? `The primary colors must match jersey colors: base ${dto.baseColor || '#ffffff'}, accent ${dto.accentColor || '#111111'}. `
       : '';
-
     try {
       return await this.generateImageDataUrl(
         `${stylePrompt}Central subject is: "${dto.prompt}". ${colorContext}Clean outline, no complex gradients or busy photo textures, isolated on pure solid white background, sharp vector sportswear sticker feel.`,
@@ -404,19 +502,19 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
     }
   }
 
-  private async buildFallbackDesignResult(prompt: string) {
-    const lowerPrompt = prompt.toLowerCase();
+  private async buildFallbackDesignResult(dto: AiDesignDto) {
+    const lowerPrompt = dto.prompt.toLowerCase();
     const isFire =
       lowerPrompt.includes('fire') ||
       lowerPrompt.includes('red') ||
-      prompt.includes('火') ||
-      prompt.includes('红') ||
+      dto.prompt.includes('火') ||
+      dto.prompt.includes('红') ||
       lowerPrompt.includes('phoenix');
     const isMinimal =
       lowerPrompt.includes('minimal') ||
       lowerPrompt.includes('white') ||
-      prompt.includes('极简') ||
-      prompt.includes('白');
+      dto.prompt.includes('极简') ||
+      dto.prompt.includes('白');
 
     const palette = isFire
       ? {
@@ -510,12 +608,35 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
           scale: 0.55,
         },
       ],
-      explanation: `基于“${prompt}”生成的球衣方案：先确定主色情绪，再用胸前文字、号码和徽章建立团队识别。`,
+      patterns: [
+        {
+          source: isMinimal ? 'preset' : 'generated_svg',
+          patternId: isMinimal ? 'carbon_hexagon' : '',
+          libraryKeyword: isMinimal ? 'hexagon' : 'flame',
+          brief: isMinimal ? 'subtle technical hex mesh repeat' : 'flame speed shards repeat texture',
+          designIdea: isMinimal
+            ? '主身片加入轻量科技六边形暗纹，增强质感但不过分抢戏。'
+            : '主身片叠加火焰速度碎片重复纹理，强化爆发感与进攻气质。',
+          targetMode: 'parts',
+          targetPartIds: ['COLOUR_BASE'],
+          scale: isMinimal ? 0.95 : 1.1,
+          angle: isMinimal ? 0 : 18,
+          opacity: isMinimal ? 0.18 : 0.3,
+          patternColor: isMinimal ? palette.primary : '#ffffff',
+          bgColorMode: 'use_part_color',
+        },
+      ],
+      explanation: `基于“${dto.prompt}”生成的球衣方案：先确定主色情绪，再用胸前文字、号码、底纹与徽章建立团队识别。`,
     };
   }
 
   private normalizeDesignResult(result: any) {
-    if (!result?.jerseyColors || !Array.isArray(result.texts) || !Array.isArray(result.decals)) {
+    if (
+      !result?.jerseyColors ||
+      !Array.isArray(result.texts) ||
+      !Array.isArray(result.decals) ||
+      !Array.isArray(result.patterns)
+    ) {
       throw new BadRequestException('Gemini 返回的设计结构不完整');
     }
 
@@ -546,8 +667,225 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
         topRatio: Number(decal.topRatio) || 0.42,
         scale: Number(decal.scale) || 0.6,
       })),
+      patterns: result.patterns.slice(0, 2).map((pattern) => ({
+        source: pattern.source === 'generated_svg' ? 'generated_svg' : 'preset',
+        patternId: pattern.patternId || '',
+        libraryKeyword: pattern.libraryKeyword || '',
+        brief: String(pattern.brief || pattern.libraryKeyword || 'sports repeat texture').slice(
+          0,
+          120,
+        ),
+        designIdea: pattern.designIdea || '',
+        targetMode: pattern.targetMode === 'parts' ? 'parts' : 'all',
+        targetPartIds: Array.isArray(pattern.targetPartIds)
+          ? pattern.targetPartIds.map((partId) => String(partId)).slice(0, 6)
+          : [],
+        scale: this.clampNumber(pattern.scale, 0.2, 3, 1),
+        angle: this.clampNumber(pattern.angle, 0, 360, 0),
+        opacity: this.clampNumber(pattern.opacity, 0.1, 1, 0.3),
+        patternColor: pattern.patternColor || '#ffffff',
+        bgColorMode: pattern.bgColorMode || 'use_part_color',
+        url: pattern.url || null,
+        name: pattern.name || '',
+        category: pattern.category || '',
+      })),
       explanation: result.explanation || '',
     };
+  }
+
+  private async resolveDesignPatterns(
+    patterns: DesignPatternPlan[],
+    dto: AiDesignDto,
+  ): Promise<DesignPatternPlan[]> {
+    if (!Array.isArray(patterns) || !patterns.length) {
+      return [];
+    }
+
+    const availablePartIds = new Set((dto.availableColorParts || []).map((part) => part.id));
+    const availablePatterns = Array.isArray(dto.availablePatterns) ? dto.availablePatterns : [];
+    const resolvedPatterns: DesignPatternPlan[] = [];
+
+    for (const rawPattern of patterns) {
+      const normalized = this.normalizePatternPlan(rawPattern, availablePartIds);
+      if (!normalized) {
+        continue;
+      }
+
+      if (normalized.source === 'preset') {
+        const preset = this.findBestPatternPreset(
+          availablePatterns,
+          normalized.patternId,
+          normalized.libraryKeyword,
+          normalized.brief,
+        );
+        if (preset?.url) {
+          normalized.patternId = preset.id;
+          normalized.name = preset.name;
+          normalized.category = preset.category;
+          normalized.url = preset.url;
+          if (!normalized.libraryKeyword) {
+            normalized.libraryKeyword = preset.keywords?.[0] || preset.name || preset.id;
+          }
+        } else {
+          normalized.source = 'generated_svg';
+        }
+      }
+
+      if (normalized.source === 'generated_svg') {
+        try {
+          normalized.url = await this.generatePatternSvgDataUrl(normalized, dto);
+        } catch (error) {
+          this.logger.warn(
+            `Pattern SVG generation failed, trying preset fallback: ${this.getErrorMessage(error)}`,
+          );
+          const fallbackPreset = this.findBestPatternPreset(
+            availablePatterns,
+            normalized.patternId,
+            normalized.libraryKeyword,
+            normalized.brief,
+          );
+          if (fallbackPreset?.url) {
+            normalized.source = 'preset';
+            normalized.patternId = fallbackPreset.id;
+            normalized.name = fallbackPreset.name;
+            normalized.category = fallbackPreset.category;
+            normalized.url = fallbackPreset.url;
+          } else {
+            continue;
+          }
+        }
+      }
+
+      if (normalized.url) {
+        resolvedPatterns.push(normalized);
+      }
+    }
+
+    return resolvedPatterns.slice(0, 2);
+  }
+
+  private normalizePatternPlan(
+    pattern: DesignPatternPlan,
+    availablePartIds: Set<string>,
+  ): DesignPatternPlan | null {
+    if (!pattern || !pattern.brief) {
+      return null;
+    }
+
+    const targetMode = pattern.targetMode === 'parts' ? 'parts' : 'all';
+    const filteredPartIds =
+      targetMode === 'parts'
+        ? (Array.isArray(pattern.targetPartIds) ? pattern.targetPartIds : []).filter((partId) =>
+            availablePartIds.has(partId),
+          )
+        : [];
+
+    return {
+      source: pattern.source === 'generated_svg' ? 'generated_svg' : 'preset',
+      patternId: pattern.patternId || '',
+      libraryKeyword: pattern.libraryKeyword || '',
+      brief: String(pattern.brief).slice(0, 120),
+      designIdea: pattern.designIdea || '',
+      targetMode: filteredPartIds.length > 0 ? targetMode : 'all',
+      targetPartIds: filteredPartIds.length > 0 ? filteredPartIds : [],
+      scale: this.clampNumber(pattern.scale, 0.2, 3, 1),
+      angle: this.clampNumber(pattern.angle, 0, 360, 0),
+      opacity: this.clampNumber(pattern.opacity, 0.1, 1, 0.3),
+      patternColor: this.isHexColor(pattern.patternColor) ? pattern.patternColor : '#ffffff',
+      bgColorMode: pattern.bgColorMode || 'use_part_color',
+    };
+  }
+
+  private findBestPatternPreset(
+    patterns: AvailablePatternOption[],
+    patternId?: string,
+    libraryKeyword?: string,
+    brief?: string,
+  ) {
+    if (!Array.isArray(patterns) || !patterns.length) {
+      return null;
+    }
+
+    const normalizedId = (patternId || '').toLowerCase();
+    if (normalizedId) {
+      const directMatch = patterns.find((pattern) => pattern.id.toLowerCase() === normalizedId);
+      if (directMatch) {
+        return directMatch;
+      }
+    }
+
+    const haystack = `${libraryKeyword || ''} ${brief || ''}`.toLowerCase();
+    if (!haystack.trim()) {
+      return patterns[0];
+    }
+
+    let best: AvailablePatternOption | null = null;
+    let bestScore = -1;
+    for (const pattern of patterns) {
+      const terms = [
+        pattern.id,
+        pattern.name || '',
+        pattern.category || '',
+        ...(Array.isArray(pattern.keywords) ? pattern.keywords : []),
+      ]
+        .filter(Boolean)
+        .map((term) => term.toLowerCase());
+      const score = terms.reduce((acc, term) => (haystack.includes(term) ? acc + 1 : acc), 0);
+      if (score > bestScore) {
+        best = pattern;
+        bestScore = score;
+      }
+    }
+    return bestScore > 0 ? best : null;
+  }
+
+  private async generatePatternSvgDataUrl(pattern: DesignPatternPlan, dto: AiDesignDto) {
+    if (!this.hasGeminiKey()) {
+      throw new Error('Gemini key missing for pattern generation');
+    }
+
+    const partSummary = pattern.targetPartIds.length
+      ? pattern.targetPartIds.join(', ')
+      : 'all editable garment panels';
+    const prompt = `Act as an expert seamless SVG pattern designer for sportswear printing.
+
+Create a repeatable SVG tile pattern for a ${dto.productType || 'sportswear'} garment.
+Pattern brief: ${pattern.brief}.
+Chinese design idea: ${pattern.designIdea || '运动感重复底纹'}.
+Target garment panels: ${partSummary}.
+Preferred pattern keyword: ${pattern.libraryKeyword || 'sports texture'}.
+Preferred foreground color: ${pattern.patternColor || '#ffffff'}.
+
+Constraints:
+- Do not render any text, letters, numbers, or Chinese characters.
+- Output ONLY valid raw SVG XML, no markdown.
+- Use one <svg> root with xmlns="http://www.w3.org/2000/svg", width="256", height="256", viewBox="0 0 256 256".
+- Transparent background only.
+- Design must work as a repeating tile for jersey fabric.
+- Use 1 to 3 colors maximum, with crisp vector paths and simple geometry.
+- Avoid text, logos, mascots, photos, filters, masks, or raster images.
+- Prefer angular, sporty, repeat-friendly forms such as camo shards, lightning streaks, speed lines, mesh, halftone, chevrons, grids, or geometric motion cues.
+- Keep elements balanced near tile edges so repeated tiling feels natural.
+- No external assets, scripts, CSS, or embedded images.`;
+
+    const response = await this.generateGeminiContent(GEMINI_TEXT_MODEL, [{ text: prompt }], {
+      maxOutputTokens: 4096,
+    });
+    const svg = this.sanitizeSvg(this.extractText(response));
+    const base64 = Buffer.from(svg, 'utf8').toString('base64');
+    return `data:image/svg+xml;base64,${base64}`;
+  }
+
+  private clampNumber(value: unknown, min: number, max: number, fallback: number) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) {
+      return fallback;
+    }
+    return Math.min(max, Math.max(min, num));
+  }
+
+  private isHexColor(value?: string) {
+    return typeof value === 'string' && /^#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/.test(value);
   }
 
   private pickKeyword(prompt: string) {
@@ -592,12 +930,14 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
   }
 
   private async generateSvgDataUrl(subjectPrompt: string, kind: 'badge' | 'logo') {
+    const textPolicy = this.getImageTextPolicy(subjectPrompt);
     const prompt = `Act as an expert SVG designer. Generate a responsive, modern, and highly detailed SVG ${kind} for sportswear printing.
 
 Subject:
 ${subjectPrompt}
 
 Constraints & Code Requirements:
+- ${textPolicy}
 - Output ONLY valid, raw, unwrapped XML SVG code. No explanations, no markdown wrapper, no \`\`\`xml.
 - Use a single <svg> root with xmlns="http://www.w3.org/2000/svg", viewBox="0 0 800 800", width="800", height="800", preserveAspectRatio="xMidYMid meet".
 - Transparent background: do not draw a background rectangle, checkerboard, white square, or solid backdrop.
