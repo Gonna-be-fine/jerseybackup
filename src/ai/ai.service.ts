@@ -930,14 +930,12 @@ Constraints:
   }
 
   private async generateSvgDataUrl(subjectPrompt: string, kind: 'badge' | 'logo') {
-    const textPolicy = this.getImageTextPolicy(subjectPrompt);
     const prompt = `Act as an expert SVG designer. Generate a responsive, modern, and highly detailed SVG ${kind} for sportswear printing.
 
 Subject:
 ${subjectPrompt}
 
 Constraints & Code Requirements:
-- ${textPolicy}
 - Output ONLY valid, raw, unwrapped XML SVG code. No explanations, no markdown wrapper, no \`\`\`xml.
 - Use a single <svg> root with xmlns="http://www.w3.org/2000/svg", viewBox="0 0 800 800", width="800", height="800", preserveAspectRatio="xMidYMid meet".
 - Transparent background: do not draw a background rectangle, checkerboard, white square, or solid backdrop.
