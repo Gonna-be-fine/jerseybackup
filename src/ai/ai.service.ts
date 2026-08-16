@@ -130,6 +130,8 @@ const DESIGN_RESPONSE_SCHEMA = {
           scale: { type: 'number' },
           angle: { type: 'number' },
           opacity: { type: 'number' },
+          offsetX: { type: 'number' },
+          offsetY: { type: 'number' },
           patternColor: { type: 'string' },
           bgColorMode: { type: 'string' },
         },
@@ -141,6 +143,8 @@ const DESIGN_RESPONSE_SCHEMA = {
           'scale',
           'angle',
           'opacity',
+          'offsetX',
+          'offsetY',
           'patternColor',
           'bgColorMode',
         ],
@@ -170,6 +174,8 @@ type DesignPatternPlan = {
   scale: number;
   angle: number;
   opacity: number;
+  offsetX?: number;
+  offsetY?: number;
   patternColor?: string;
   bgColorMode?: string;
   url?: string | null;
@@ -398,7 +404,7 @@ Primary text already on garment: ${dto.primaryText || 'none'}.
 Available reusable preset patterns: ${patternSummary || 'none, AI may choose generated_svg when a custom repeat pattern is needed'}.
 Use patterns for repeating body textures such as camo, stripes, lightning textures, geometry, mesh, halftone, or subtle all-over motifs.
 Use decals for badges, mascots, crests, emblems, sponsors, and symbolic chest graphics.
-Patterns must include source, patternId when using source preset, libraryKeyword, brief, designIdea in Chinese, targetMode, targetPartIds, scale, angle, opacity, patternColor, bgColorMode.
+Patterns must include source, patternId when using source preset, libraryKeyword, brief, designIdea in Chinese, targetMode, targetPartIds, scale, angle, opacity, offsetX, offsetY, patternColor, bgColorMode.
 If a custom repeat texture is required and presets are not a good match, use source generated_svg.
 When targetMode is all, targetPartIds must be an empty array. When targetMode is parts, targetPartIds must be chosen only from available editable color parts.
 Decals must include role, libraryKeyword, designIdea in Chinese, imagenPrompt, leftRatio, topRatio, scale.
@@ -408,7 +414,7 @@ The JSON shape must be:
   "colorsRationale": "Chinese sentence",
   "texts": [{"text":"...","fill":"#hex","fontFamily":"...","fontSize":44,"isCurved":true,"curveValue":30,"leftRatio":0.5,"topRatio":0.54}],
   "decals": [{"role":"primary_badge","libraryKeyword":"star","designIdea":"...","imagenPrompt":"...","leftRatio":0.33,"topRatio":0.42,"scale":0.65}],
-  "patterns": [{"source":"preset","patternId":"stripes_diag","libraryKeyword":"stripes","brief":"fast diagonal stripe repeat","designIdea":"...","targetMode":"parts","targetPartIds":["COLOUR_BASE"],"scale":1.0,"angle":0,"opacity":0.28,"patternColor":"#ffffff","bgColorMode":"use_part_color"}],
+  "patterns": [{"source":"preset","patternId":"stripes_diag","libraryKeyword":"stripes","brief":"fast diagonal stripe repeat","designIdea":"...","targetMode":"parts","targetPartIds":["COLOUR_BASE"],"scale":1.0,"angle":0,"opacity":0.28,"offsetX":0,"offsetY":0,"patternColor":"#ffffff","bgColorMode":"use_part_color"}],
   "explanation": "Chinese paragraph"
 }`;
 
@@ -622,6 +628,8 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
           scale: isMinimal ? 0.95 : 1.1,
           angle: isMinimal ? 0 : 18,
           opacity: isMinimal ? 0.18 : 0.3,
+          offsetX: 0,
+          offsetY: 0,
           patternColor: isMinimal ? palette.primary : '#ffffff',
           bgColorMode: 'use_part_color',
         },
@@ -683,6 +691,8 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
         scale: this.clampNumber(pattern.scale, 0.2, 3, 1),
         angle: this.clampNumber(pattern.angle, 0, 360, 0),
         opacity: this.clampNumber(pattern.opacity, 0.1, 1, 0.3),
+        offsetX: this.clampNumber(pattern.offsetX, -200, 200, 0),
+        offsetY: this.clampNumber(pattern.offsetY, -200, 200, 0),
         patternColor: pattern.patternColor || '#ffffff',
         bgColorMode: pattern.bgColorMode || 'use_part_color',
         url: pattern.url || null,
@@ -791,6 +801,8 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
       scale: this.clampNumber(pattern.scale, 0.2, 3, 1),
       angle: this.clampNumber(pattern.angle, 0, 360, 0),
       opacity: this.clampNumber(pattern.opacity, 0.1, 1, 0.3),
+      offsetX: this.clampNumber(pattern.offsetX, -200, 200, 0),
+      offsetY: this.clampNumber(pattern.offsetY, -200, 200, 0),
       patternColor: this.isHexColor(pattern.patternColor) ? pattern.patternColor : '#ffffff',
       bgColorMode: pattern.bgColorMode || 'use_part_color',
     };
