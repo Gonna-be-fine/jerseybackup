@@ -47,11 +47,32 @@ export class UsersService {
     await this.emailVerificationRepository.save(verification);
 
     // 发送验证码邮件
+    const fromAddress = process.env.MAIL_FROM || process.env.MAIL_USER || '';
     await this.transporter.sendMail({
-      from: process.env.MAIL_FROM,
+      from: `AraWear.online <${fromAddress}>`,
+      replyTo: fromAddress,
       to: email,
-      subject: '验证码',
-      text: `您的验证码是：${code}，15分钟内有效。`,
+      subject: 'AraWear.online 注册验证码',
+      text: `你好，
+
+      你正在注册 AraWear.online。
+      你的验证码是：${code}
+      有效期：15 分钟
+
+      如果这不是你的操作，请忽略这封邮件。`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; color: #1f2937; line-height: 1.6; max-width: 560px;">
+          <h2 style="margin: 0 0 16px; font-size: 20px; color: #111827;">AraWear.online 注册验证码</h2>
+          <p style="margin: 0 0 12px;">你好，</p>
+          <p style="margin: 0 0 16px;">你正在注册 AraWear.online。请使用下面的验证码完成验证：</p>
+          <div style="display: inline-block; padding: 14px 20px; border-radius: 10px; background: #f3f4f6; font-size: 28px; font-weight: 700; letter-spacing: 4px; color: #111827;">
+            ${code}
+          </div>
+          <p style="margin: 16px 0 8px;">有效期：15 分钟</p>
+          <p style="margin: 0; color: #6b7280;">如果这不是你的操作，请忽略这封邮件。</p>
+          <p style="margin: 24px 0 0; color: #9ca3af; font-size: 12px;">来自 AraWear.online</p>
+        </div>
+      `,
     });
   }
 
