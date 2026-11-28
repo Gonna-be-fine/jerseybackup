@@ -335,10 +335,10 @@ The JSON shape must be:
       const boundaryResult = agentResult.toolResults.find(
         (item) => item.name === 'get_jersey_boundary',
       );
-      const allowedRegionIds = boundaryResult
-        ? new Set(
-            (JSON.parse(boundaryResult.content)?.colorRegions || []).map(
-              (region: { id: string }) => region.id,
+      const allowedRegionIds: Set<string> | undefined = boundaryResult
+        ? new Set<string>(
+            ((JSON.parse(boundaryResult.content)?.colorRegions || []) as Array<{ id: string }>).map(
+              (region) => region.id,
             ),
           )
         : undefined;
