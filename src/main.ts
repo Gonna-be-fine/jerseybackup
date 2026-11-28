@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
@@ -17,6 +18,27 @@ async function bootstrap() {
   app.use(urlencoded({ extended: true, limit: process.env.REQUEST_BODY_LIMIT || '25mb' }));
 
   app.setGlobalPrefix('api');
+
+  // Keep API docs available in development, but disabled in production by default.
+  const swaggerEnabled =
+    process.env.SWAGGER_ENABLED === 'true' || process.env.NODE_ENV !== 'production';
+
+  if (swaggerEnabled) {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Jersey Design API')
+      .setDescription('球衣定制与 AI 设计服务 API 文档')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+
+    const swaggerDocument = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('docs', app, swaggerDocument, {
+      useGlobalPrefix: true,
+      swaggerOptions: {
+        persistAuthorization: true,
+      },
+    });
+  }
   app.useGlobalPipes(new ValidationPipe());
   app.useGlobalInterceptors(new TransformInterceptor());
   app.useGlobalFilters(new HttpExceptionFilter());
