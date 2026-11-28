@@ -22,8 +22,12 @@ export interface ColorRegion {
   ename: string;
   side: BoundarySide;
   fill: string | null;
-  /** Original SVG path data. Kept intact for accurate downstream geometry work. */
+  /** Original SVG path data. Kept intact for downstream clipping and collision work. */
   geometry: string;
+  /** Exact path bounds before transforms, then conservative AABB after SVG transforms. */
+  geometryBounds: { x: number; y: number; width: number; height: number } | null;
+  /** Transform from this path's local coordinates to the root SVG coordinate system. */
+  matrix: SvgMatrix;
 }
 
 export interface ImageSlot {
