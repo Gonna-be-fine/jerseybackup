@@ -15,6 +15,18 @@ const region = (geometry: string, bounds = { x: 0, y: 0, width: 100, height: 100
 describe('PlacementValidator', () => {
   const validator = new PlacementValidator();
 
+  it('debugs sampled rectangular contour', () => {
+    const contours = (validator as any).buildContours(
+      'M0 0 H100 V100 H0 Z',
+      { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
+    );
+    console.log('CONTOUR_DEBUG', JSON.stringify(contours.map((contour: any[]) => ({
+      length: contour.length,
+      points: contour.slice(0, 8),
+      last: contour[contour.length - 1],
+    }))));
+  });
+
   it('accepts an unrotated rectangle fully inside a rectangular SVG panel', () => {
     const result = validator.validate(
       region('M0 0 H100 V100 H0 Z'),
