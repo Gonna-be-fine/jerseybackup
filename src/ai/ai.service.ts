@@ -239,10 +239,15 @@ export class AiService {
       }
     }
 
+    const actualRegionIds = Array.isArray(result._actualRegionIds)
+      ? new Set<string>(result._actualRegionIds)
+      : new Set<string>(Object.keys(result.jerseyColors || {}));
+    delete result._actualRegionIds;
+
     result.patterns = await this.resolveDesignPatterns(
       result.patterns || [],
       dto,
-      new Set(Object.keys(result.jerseyColors || {})),
+      actualRegionIds,
     );
 
     if (dto.generateCustomDecal) {
@@ -291,7 +296,7 @@ You must recommend jersey colors, a Chinese colorsRationale, 0-2 typographic ele
 Typography coordinates use leftRatio/topRatio from 0.1 to 0.9. Main titles usually use leftRatio 0.5 and topRatio 0.54 to 0.60. Numbers use topRatio 0.70 to 0.76.
 Fonts must be one of: American Captain, Athletic, Komikazoom, Hardsign, summber-bike.
 The garment productType is "${productType}".
-Available editable color parts: ${colorPartSummary || 'COLOUR_BASE, COLOUR_PRIMARY, COLOUR_SECONDARY, COLOUR_HEM'}.
+Available editable color parts: ${colorPartSummary || 'not provided; inspect the SVG with get_jersey_boundary and use its actual color-region IDs'}.
 Actual SVG boundary information: not yet inspected. You MUST call get_jersey_boundary before finalizing the design. Use only IDs returned by that tool. For any proposed decal placement, call validate_image_placement and revise invalid placements.
 Only use region IDs that exist in the actual template; do not assume every semantic ColorPrevList ID exists. The jerseyColors object must contain only actual color-region IDs returned by get_jersey_boundary; omit missing IDs such as COLOUR_HEM when the template does not contain them.
 Current part colors: ${currentColorsSummary || 'not provided'}.
@@ -335,7 +340,11 @@ The JSON shape must be:
             ),
           )
         : undefined;
-      return this.normalizeDesignResult(parsedDesign, allowedRegionIds);
+      const normalized = this.normalizeDesignResult(parsedDesign, allowedRegionIds);
+      return {
+        ...normalized,
+        _actualRegionIds: allowedRegionIds ? Array.from(allowedRegionIds) : Object.keys(normalized.jerseyColors),
+      };
     } catch (error) {
       this.logger.warn(`Zhipu LangGraph design agent failed, fallback will be used: ${this.getErrorMessage(error)}`);
       return null;
@@ -553,16 +562,24 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
       !Array.isArray(result.decals) ||
       !Array.isArray(result.patterns)
     ) {
-      throw new BadRequestException('Gemini 返回的设计结构不完整');
+      throw new BadRequestException('AI 返回的设计结构不完整');
+    }
+
+    const jerseyColors = Object.fromEntries(
+      Object.entries(result.jerseyColors).filter(([regionId, color]) =>
+        this.isHexColor(String(color)) &&
+        (!allowedRegionIds || allowedRegionIds.has(regionId)),
+      ),
+    );
+    if (
+      !jerseyColors.COLOUR_BASE &&
+      (!allowedRegionIds || allowedRegionIds.has('COLOUR_BASE'))
+    ) {
+      jerseyColors.COLOUR_BASE = '#f5f5f7';
     }
 
     return {
-      jerseyColors: Object.fromEntries(
-        Object.entries(result.jerseyColors).filter(([regionId, color]) =>
-          this.isHexColor(String(color)) &&
-          (!allowedRegionIds || allowedRegionIds.has(regionId)),
-        ),
-      ),
+      jerseyColors,
       colorsRationale: result.colorsRationale || '',
       texts: result.texts.slice(0, 2).map((text) => ({
         text: String(text.text || 'TEAM').slice(0, 20),
@@ -620,10 +637,14 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
       return [];
     }
 
-    const availablePartIds = new Set((dto.availableColorParts || []).map((part) => part.id));
-    if (!availablePartIds.size) {
-      for (const partId of inferredPartIds) availablePartIds.add(partId);
-    }
+    const requestedPartIds = new Set((dto.availableColorParts || []).map((part) => part.id));
+    const availablePartIds = inferredPartIds.size
+      ? new Set(
+          requestedPartIds.size
+            ? Array.from(requestedPartIds).filter((partId) => inferredPartIds.has(partId))
+            : Array.from(inferredPartIds),
+        )
+      : requestedPartIds;
     const availablePatterns = Array.isArray(dto.availablePatterns) ? dto.availablePatterns : [];
     const resolvedPatterns: DesignPatternPlan[] = [];
 
