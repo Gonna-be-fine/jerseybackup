@@ -110,7 +110,14 @@ export class PlacementValidator {
       if (!current.length) pushPoint(part.start);
       const steps = Math.max(1, Math.ceil(part.length / this.curveTolerance));
       for (let i = 1; i <= steps; i++) {
-        pushPoint(part.getPointAtLength((part.length * i) / steps));
+        // Use the exact segment endpoint on the final sample. Arc-length
+        // interpolation can otherwise leave tiny endpoint drift, splitting
+        // one closed contour into several open contours.
+        const point =
+          i === steps
+            ? part.end
+            : part.getPointAtLength((part.length * i) / steps);
+        pushPoint(point);
       }
     }
 
@@ -172,33 +179,6 @@ export class PlacementValidator {
     if (dot < -this.epsilon) return false;
     const lengthSquared = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
     return dot <= lengthSquared + this.epsilon;
-  }
-
-  private segmentsIntersect(
-    a: PlacementPoint, b: PlacementPoint, c: PlacementPoint, d: PlacementPoint,
-  ): boolean {
-    const orient = (p: PlacementPoint, q: PlacementPoint, r: PlacementPoint) =>
-      (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
-    const o1 = orient(a, b, c);
-    const o2 = orient(a, b, d);
-    const o3 = orient(c, d, a);
-    const o4 = orient(c, d, b);
-    if (
-      ((o1 > this.epsilon && o2 < -this.epsilon) || (o1 < -this.epsilon && o2 > this.epsilon)) &&
-      ((o3 > this.epsilon && o4 < -this.epsilon) || (o3 < -this.epsilon && o4 > this.epsilon))
-    ) return true;
-    return (
-      (Math.abs(o1) <= this.epsilon && this.pointOnSegment(c, a, b)) ||
-      (Math.abs(o2) <= this.epsilon && this.pointOnSegment(d, a, b)) ||
-      (Math.abs(o3) <= this.epsilon && this.pointOnSegment(a, c, d)) ||
-      (Math.abs(o4) <= this.epsilon && this.pointOnSegment(b, c, d))
-    );
-  }
-
-  private edges(points: PlacementPoint[]): Array<[PlacementPoint, PlacementPoint]> {
-    const edges: Array<[PlacementPoint, PlacementPoint]> = [];
-    for (let i = 0; i < points.length - 1; i++) edges.push([points[i], points[i + 1]]);
-    return edges;
   }
 
   private rectangleCorners(rectangle: PlacementRectangle): PlacementPoint[] {
