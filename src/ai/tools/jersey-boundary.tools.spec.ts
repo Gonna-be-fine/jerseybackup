@@ -29,8 +29,9 @@ describe('JerseyBoundaryTools', () => {
     expect(getBoundary.name).toBe('get_jersey_boundary');
     expect(validatePlacement.name).toBe('validate_image_placement');
 
+    const validateTool = validatePlacement as any;
     await expect(
-      validatePlacement.invoke({
+      validateTool.invoke({
         productType: 'basketball',
         targetRegion: 'COLOUR_BASE',
         x: 10,
