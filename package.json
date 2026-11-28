@@ -38,7 +38,8 @@
     "rxjs": "^7.8.1",
     "typeorm": "^0.3.20",
     "undici": "^6.27.0",
-    "svg-path-bbox": "^2.1.0"
+    "svg-path-bbox": "^2.1.0",
+    "svg-path-properties": "^2.2.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
