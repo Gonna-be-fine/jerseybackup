@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { BoundaryService } from '../../boundary/boundary.service';
+import { tool } from '@langchain/core/tools';
+import { z } from 'zod';
 
 type JsonSchema = Record<string, unknown>;
 
@@ -18,6 +20,57 @@ export interface GeminiFunctionDeclaration {
 @Injectable()
 export class JerseyBoundaryTools {
   constructor(private readonly boundaryService: BoundaryService) {}
+
+  /**
+   * LangChain-native tools. Zod is the single source of truth for argument
+   * validation; the legacy Gemini declarations remain temporarily for the
+   * old generation path while it is being migrated.
+   */
+  getLangChainTools() {
+    const getBoundary = tool(
+      async ({ productType }) =>
+        JSON.stringify(await this.getJerseyBoundary({ productType })),
+      {
+        name: 'get_jersey_boundary',
+        description:
+          'Read the actual jersey SVG template. Returns existing editable color-region IDs, image slots, text groups, and their bounds in root SVG viewBox coordinates. Always call this before planning placements. Never assume a semantic color ID exists.',
+        schema: z.object({
+          productType: z.string().trim().min(1).max(100),
+        }),
+      },
+    );
+
+    const validatePlacement = tool(
+      async ({ productType, targetRegion, x, y, width, height, rotation }) =>
+        JSON.stringify(
+          await this.validateImagePlacement({
+            productType,
+            targetRegion,
+            x,
+            y,
+            width,
+            height,
+            rotation,
+          }),
+        ),
+      {
+        name: 'validate_image_placement',
+        description:
+          'Validate whether a rectangular decal/image placement fits completely inside an actual editable SVG color region. Coordinates use root SVG viewBox units. Call this after reading the template boundary; if invalid, adjust the rectangle and retry.',
+        schema: z.object({
+          productType: z.string().trim().min(1).max(100),
+          targetRegion: z.string().trim().min(1).max(128),
+          x: z.number().finite(),
+          y: z.number().finite(),
+          width: z.number().positive(),
+          height: z.number().positive(),
+          rotation: z.number().finite().default(0),
+        }),
+      },
+    );
+
+    return [getBoundary, validatePlacement];
+  }
 
   getFunctionDeclarations(): GeminiFunctionDeclaration[] {
     return [
@@ -78,7 +131,7 @@ export class JerseyBoundaryTools {
     }
   }
 
-  private async getJerseyBoundary(args: Record<string, unknown>) {
+  async getJerseyBoundary(args: Record<string, unknown>) {
     const productType = this.requiredString(args.productType, 'productType');
     const context = await this.boundaryService.getBoundary(productType);
 
@@ -110,7 +163,7 @@ export class JerseyBoundaryTools {
     };
   }
 
-  private async validateImagePlacement(args: Record<string, unknown>) {
+  async validateImagePlacement(args: Record<string, unknown>) {
     const productType = this.requiredString(args.productType, 'productType');
     const targetRegion = this.requiredString(args.targetRegion, 'targetRegion');
 
