@@ -773,12 +773,22 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
     }
 
     const targetMode = pattern.targetMode === 'parts' ? 'parts' : 'all';
+    const requestedPartIds = Array.isArray(pattern.targetPartIds)
+      ? pattern.targetPartIds
+      : [];
     const filteredPartIds =
       targetMode === 'parts'
-        ? (Array.isArray(pattern.targetPartIds) ? pattern.targetPartIds : []).filter((partId) =>
-            availablePartIds.has(partId),
-          )
+        ? requestedPartIds.filter((partId) => availablePartIds.has(partId))
         : [];
+
+    // Never broaden a region-specific pattern to the whole garment when the
+    // model supplies invalid or unavailable region IDs.
+    if (
+      targetMode === 'parts' &&
+      (!requestedPartIds.length || filteredPartIds.length !== requestedPartIds.length)
+    ) {
+      return null;
+    }
 
     return {
       source: pattern.source === 'generated_svg' ? 'generated_svg' : 'preset',
@@ -786,7 +796,7 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
       libraryKeyword: pattern.libraryKeyword || '',
       brief: String(pattern.brief).slice(0, 120),
       designIdea: pattern.designIdea || '',
-      targetMode: filteredPartIds.length > 0 ? targetMode : 'all',
+      targetMode,
       targetPartIds: filteredPartIds.length > 0 ? filteredPartIds : [],
       scale: this.clampNumber(pattern.scale, 0.2, 3, 1),
       angle: this.clampNumber(pattern.angle, 0, 360, 0),
@@ -839,43 +849,6 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
       }
     }
     return bestScore > 0 ? best : null;
-  }
-
-  private async generatePatternSvgDataUrl(pattern: DesignPatternPlan, dto: AiDesignDto) {
-    if (!this.hasGeminiKey()) {
-      throw new Error('Gemini key missing for pattern generation');
-    }
-
-    const partSummary = pattern.targetPartIds.length
-      ? pattern.targetPartIds.join(', ')
-      : 'all editable garment panels';
-    const prompt = `Act as an expert seamless SVG pattern designer for sportswear printing.
-
-Create a repeatable SVG tile pattern for a ${dto.productType || 'sportswear'} garment.
-Pattern brief: ${pattern.brief}.
-Chinese design idea: ${pattern.designIdea || '运动感重复底纹'}.
-Target garment panels: ${partSummary}.
-Preferred pattern keyword: ${pattern.libraryKeyword || 'sports texture'}.
-Preferred foreground color: ${pattern.patternColor || '#ffffff'}.
-
-Constraints:
-- Do not render any text, letters, numbers, or Chinese characters.
-- Output ONLY valid raw SVG XML, no markdown.
-- Use one <svg> root with xmlns="http://www.w3.org/2000/svg", width="256", height="256", viewBox="0 0 256 256".
-- Transparent background only.
-- Design must work as a repeating tile for jersey fabric.
-- Use 1 to 3 colors maximum, with crisp vector paths and simple geometry.
-- Avoid text, logos, mascots, photos, filters, masks, or raster images.
-- Prefer angular, sporty, repeat-friendly forms such as camo shards, lightning streaks, speed lines, mesh, halftone, chevrons, grids, or geometric motion cues.
-- Keep elements balanced near tile edges so repeated tiling feels natural.
-- No external assets, scripts, CSS, or embedded images.`;
-
-    const response = await this.generateGeminiContent(GEMINI_TEXT_MODEL, [{ text: prompt }], {
-      maxOutputTokens: 4096,
-    });
-    const svg = this.sanitizeSvg(this.extractText(response));
-    const base64 = Buffer.from(svg, 'utf8').toString('base64');
-    return `data:image/svg+xml;base64,${base64}`;
   }
 
   private clampNumber(value: unknown, min: number, max: number, fallback: number) {
