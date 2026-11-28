@@ -4,6 +4,7 @@ import { AiService } from './ai.service';
 import { AiDesignDto } from './dto/ai-design.dto';
 import { AiLogoDto } from './dto/ai-logo.dto';
 import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
+import { AiPatternGenerateDto } from './dto/ai-pattern-generate.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
@@ -13,6 +14,11 @@ export class AiController {
   @Post('design')
   generateDesign(@Request() req, @Body() dto: AiDesignDto) {
     return this.aiService.generateDesign(req.user.id, dto);
+  }
+
+  @Post('patterns/generate')
+  generatePattern(@Request() req, @Body() dto: AiPatternGenerateDto) {
+    return this.aiService.generatePattern(req.user.id, dto);
   }
 
   @Post('logo')
