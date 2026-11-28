@@ -60,8 +60,8 @@ export class JerseyBoundaryTools {
         schema: z.object({
           productType: z.string().min(1).max(100),
           targetRegion: z.string().min(1).max(128),
-          x: z.number().finite(),
-          y: z.number().finite(),
+          x: z.number(),
+          y: z.number(),
           width: z.number().positive(),
           height: z.number().positive(),
           rotation: z.number().optional(),
