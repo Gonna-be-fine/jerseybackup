@@ -3,6 +3,8 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
+import { OnModuleDestroy } from '@nestjs/common';
+import { Agent, fetch as undiciFetch } from 'undici';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -13,7 +15,17 @@ type ComfyUiImage = {
 };
 
 @Injectable()
-export class ComfyUiProvider {
+export class ComfyUiProvider implements OnModuleDestroy {
+  private readonly dispatcher = new Agent();
+
+  async onModuleDestroy() {
+    await this.dispatcher.close();
+  }
+
+  private request(url: string, init: Record<string, unknown> = {}) {
+    return undiciFetch(url, { ...init, dispatcher: this.dispatcher } as any);
+  }
+
   async generateImage(prompt: string, aspectRatio: string): Promise<string> {
     const baseUrl = (process.env.COMFYUI_BASE_URL || 'http://127.0.0.1:8188').replace(/\/$/, '');
     const workflowPath = process.env.COMFYUI_WORKFLOW_PATH?.trim();
@@ -66,7 +78,7 @@ export class ComfyUiProvider {
     );
 
     const clientId = randomUUID();
-    const submitResponse = await fetch(`${baseUrl}/prompt`, {
+    const submitResponse = await this.request(`${baseUrl}/prompt`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: workflow, client_id: clientId }),
@@ -135,7 +147,7 @@ export class ComfyUiProvider {
 
     while (Date.now() - startedAt < timeoutMs) {
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
-      const response = await fetch(
+      const response = await this.request(
         `${baseUrl}/history/${encodeURIComponent(promptId)}`,
       );
       if (!response.ok) {
@@ -178,7 +190,7 @@ export class ComfyUiProvider {
       subfolder: image.subfolder || '',
       type: image.type || 'output',
     });
-    const response = await fetch(`${baseUrl}/view?${query.toString()}`);
+    const response = await this.request(`${baseUrl}/view?${query.toString()}`);
     if (!response.ok) {
       throw new Error(`ComfyUI image download failed: ${response.status}`);
     }
