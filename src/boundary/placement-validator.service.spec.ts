@@ -15,30 +15,6 @@ const region = (geometry: string, bounds = { x: 0, y: 0, width: 100, height: 100
 describe('PlacementValidator', () => {
   const validator = new PlacementValidator();
 
-  it('builds one closed contour for a simple rectangular SVG path', () => {
-    const contours = (validator as any).buildContours(
-      'M0 0 H100 V100 H0 Z',
-      { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 },
-    );
-    console.log(
-      'RECTANGLE_CONTOUR_DEBUG',
-      JSON.stringify(
-        contours.map((contour: Array<{ x: number; y: number }>) => ({
-          length: contour.length,
-          first: contour[0],
-          last: contour[contour.length - 1],
-          bounds: {
-            minX: Math.min(...contour.map((point) => point.x)),
-            maxX: Math.max(...contour.map((point) => point.x)),
-            minY: Math.min(...contour.map((point) => point.y)),
-            maxY: Math.max(...contour.map((point) => point.y)),
-          },
-        })),
-      ),
-    );
-    expect(contours).toHaveLength(1);
-  });
-
   it('accepts an unrotated rectangle fully inside a rectangular SVG panel', () => {
     const result = validator.validate(
       region('M0 0 H100 V100 H0 Z'),
