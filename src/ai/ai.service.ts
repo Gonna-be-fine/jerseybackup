@@ -298,11 +298,11 @@ export class AiService {
       const primaryBadgeDecal =
         result.decals?.find((decal) => decal.role === 'primary_badge') || result.decals?.[0];
       if (primaryBadgeDecal?.imagenPrompt) {
-        result.generatedBadgeImage = await this.generateSvgDataUrl(
-          `A highly detailed sportswear decal emblem of ${primaryBadgeDecal.imagenPrompt}`,
-          'badge',
+        result.generatedBadgeImage = await this.generateImageDataUrl(
+          `A highly detailed sportswear decal emblem of ${primaryBadgeDecal.imagenPrompt}. Isolated centered artwork, clean silhouette, transparent or plain background, no jersey mockup.`,
+          '1:1',
         );
-        result.generatedBadgeFormat = 'svg';
+        result.generatedBadgeFormat = 'png';
       }
     }
 
