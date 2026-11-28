@@ -28,6 +28,7 @@ export interface ColorRegion {
   geometryBounds: { x: number; y: number; width: number; height: number } | null;
   /** Transform from this path's local coordinates to the root SVG coordinate system. */
   matrix: SvgMatrix;
+
 }
 
 export interface ImageSlot {
