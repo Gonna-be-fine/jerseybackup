@@ -16,6 +16,11 @@ import { JerseyBoundaryTools } from '../ai/tools/jersey-boundary.tools';
 import { ZhipuChatModelProvider } from './providers/zhipu-chat-model.provider';
 
 @Injectable()
+export interface JerseyDesignAgentResult {
+  text: string;
+  toolResults: Array<{ name?: string; content: string }>;
+}
+
 export class JerseyDesignAgent {
   private readonly logger = new Logger(JerseyDesignAgent.name);
   private graph: any;
@@ -50,6 +55,7 @@ export class JerseyDesignAgent {
             return new ToolMessage({
               content: `Tool "${call.name}" is not registered.`,
               tool_call_id: call.id || `${call.name}-${index}`,
+              name: call.name,
               status: 'error',
             });
           }
@@ -60,6 +66,7 @@ export class JerseyDesignAgent {
               content:
                 typeof result === 'string' ? result : JSON.stringify(result),
               tool_call_id: call.id || `${call.name}-${index}`,
+              name: call.name,
             });
           } catch (error) {
             const message =
@@ -102,7 +109,7 @@ export class JerseyDesignAgent {
     systemPrompt: string,
     userPrompt: string,
     threadId: string,
-  ): Promise<string> {
+  ): Promise<JerseyDesignAgentResult> {
     const result = await this.getGraph().invoke(
       {
         messages: [
@@ -122,20 +129,29 @@ export class JerseyDesignAgent {
     }
 
     const content = lastMessage.content;
-    if (typeof content === 'string') {
-      return content.trim();
-    }
-
-    const text = content
-      .filter((part) => typeof part === 'object' && part !== null && 'text' in part)
-      .map((part: any) => part.text)
-      .join('')
-      .trim();
+    const text =
+      typeof content === 'string'
+        ? content.trim()
+        : content
+            .filter((part) => typeof part === 'object' && part !== null && 'text' in part)
+            .map((part: any) => part.text)
+            .join('')
+            .trim();
 
     if (!text) {
       throw new Error('Design agent returned an empty response.');
     }
 
-    return text;
+    const toolResults = result.messages
+      .filter((message) => message instanceof ToolMessage)
+      .map((message: ToolMessage) => ({
+        name: message.name,
+        content:
+          typeof message.content === 'string'
+            ? message.content
+            : JSON.stringify(message.content),
+      }));
+
+    return { text, toolResults };
   }
 }
