@@ -54,7 +54,7 @@ export class SvgBoundaryParser {
   /**
    * A small XML element-tree reader dedicated to SVG metadata extraction.
    * It handles quoted attributes, comments, declarations and self-closing tags.
-   * It deliberately does not attempt to render SVG or interpret path geometry.
+   * It does not render SVG. Path geometry bounds are delegated to svg-path-bbox.
    */
   private parseXml(xml: string): SvgNode {
     const documentRoot: SvgNode = {
