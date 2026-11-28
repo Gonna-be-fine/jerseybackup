@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { ResourcesModule } from './resources/resources.module';
 import { PointsModule } from './points/points.module';
 import { AiModule } from './ai/ai.module';
+import { BoundaryModule } from './boundary/boundary.module';
 
 @Module({
   imports: [
@@ -30,7 +31,7 @@ import { AiModule } from './ai/ai.module';
           database: configService.get('DB_DATABASE'),
           entities: [__dirname + '/**/*.entity{.ts,.js}'],
           synchronize: configService.get('NODE_ENV') !== 'production',
-        }
+        };
       },
       inject: [ConfigService],
     }),
@@ -39,8 +40,9 @@ import { AiModule } from './ai/ai.module';
     ResourcesModule,
     PointsModule,
     AiModule,
+    BoundaryModule,
   ],
   controllers: [AppController],
   providers: [AppService],
 })
-export class AppModule { }
+export class AppModule {}
