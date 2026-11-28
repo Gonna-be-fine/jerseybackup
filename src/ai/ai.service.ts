@@ -9,6 +9,7 @@ import { ResourcesService } from '../resources/resources.service';
 import { JerseyDesignAgent } from '../agent/jersey-design-agent.service';
 import { JerseyDesignOutputSchema } from '../agent/schemas/jersey-design.schema';
 import { ImageGenerationService } from '../image-generation/image-generation.service';
+import { SvgPatternPipelineService } from './services/svg-pattern-pipeline.service';
 import { AiDesignDto } from './dto/ai-design.dto';
 import { AiLogoDto } from './dto/ai-logo.dto';
 import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
@@ -70,6 +71,8 @@ type DesignPatternPlan = {
   url?: string | null;
   category?: string;
   name?: string;
+  generationAttempts?: number;
+  validation?: { valid: boolean; checks: string[]; warnings: string[] };
 };
 
 type AvailablePatternOption = {
@@ -91,6 +94,7 @@ export class AiService {
     private readonly aiTaskRepository: Repository<AiTask>,
     private readonly jerseyDesignAgent: JerseyDesignAgent,
     private readonly imageGenerationService: ImageGenerationService,
+    private readonly svgPatternPipeline: SvgPatternPipelineService,
   ) {}
 
   async generateDesign(userId: number, dto: AiDesignDto) {
@@ -721,7 +725,15 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
 
       if (normalized.source === 'generated_svg') {
         try {
-          normalized.url = await this.generatePatternSvgDataUrl(normalized, dto);
+          const generated = await this.svgPatternPipeline.generate({
+            brief: normalized.brief,
+            designIdea: normalized.designIdea,
+            productType: dto.productType || 'sportswear',
+            patternColor: normalized.patternColor,
+          });
+          normalized.url = `data:image/svg+xml;base64,${Buffer.from(generated.svg, 'utf8').toString('base64')}`;
+          normalized.generationAttempts = generated.attempts;
+          normalized.validation = generated.validation;
         } catch (error) {
           this.logger.warn(
             `Pattern SVG generation failed, trying preset fallback: ${this.getErrorMessage(error)}`,
