@@ -13,7 +13,6 @@ import {
   StateGraph,
 } from '@langchain/langgraph';
 import { JerseyBoundaryTools } from '../ai/tools/jersey-boundary.tools';
-import { tool } from 'langchain';
 import { ZhipuChatModelProvider } from './providers/zhipu-chat-model.provider';
 
 @Injectable()
