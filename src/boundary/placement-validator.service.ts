@@ -173,11 +173,21 @@ export class PlacementValidator {
   }
 
   private pointOnSegment(p: PlacementPoint, a: PlacementPoint, b: PlacementPoint): boolean {
-    const cross = (p.y - a.y) * (b.x - a.x) - (p.x - a.x) * (b.y - a.y);
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSquared = dx * dx + dy * dy;
+
+    // Closed SVG contours and rectangles repeat their first point at the end.
+    // A zero-length closing edge must only match that exact point; otherwise
+    // the cross/dot test would incorrectly classify every point as on-segment.
+    if (lengthSquared <= this.epsilon * this.epsilon) {
+      return Math.hypot(p.x - a.x, p.y - a.y) <= this.epsilon;
+    }
+
+    const cross = (p.y - a.y) * dx - (p.x - a.x) * dy;
     if (Math.abs(cross) > this.epsilon) return false;
-    const dot = (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y);
+    const dot = (p.x - a.x) * dx + (p.y - a.y) * dy;
     if (dot < -this.epsilon) return false;
-    const lengthSquared = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
     return dot <= lengthSquared + this.epsilon;
   }
 
