@@ -13,11 +13,13 @@ import {
   StateGraph,
 } from '@langchain/langgraph';
 import { JerseyBoundaryTools } from '../ai/tools/jersey-boundary.tools';
+import { JerseyDesignTools, GeneratedDesignAsset } from './tools/jersey-design.tools';
 import { ZhipuChatModelProvider } from './providers/zhipu-chat-model.provider';
 
 export interface JerseyDesignAgentResult {
   text: string;
   toolResults: Array<{ name?: string; content: string }>;
+  generatedAssets: GeneratedDesignAsset[];
 }
 
 @Injectable()
@@ -28,6 +30,7 @@ export class JerseyDesignAgent {
   constructor(
     private readonly modelProvider: ZhipuChatModelProvider,
     private readonly boundaryTools: JerseyBoundaryTools,
+    private readonly designTools: JerseyDesignTools,
   ) {}
 
   private getGraph() {
@@ -35,7 +38,10 @@ export class JerseyDesignAgent {
       return this.graph;
     }
 
-    const tools = this.boundaryTools.getLangChainTools();
+    const tools = [
+      ...this.boundaryTools.getLangChainTools(),
+      ...this.designTools.getLangChainTools(),
+    ];
     const toolsByName = new Map<string, any>(
       tools.map((item) => [item.name, item] as [string, any]),
     );
@@ -160,6 +166,22 @@ export class JerseyDesignAgent {
             : JSON.stringify(message.content),
       }));
 
-    return { text, toolResults };
+    // Binary image payloads never enter the LLM conversation. Tools return a
+    // compact asset ID, and the backend attaches the image after the graph ends.
+    const generatedAssets: GeneratedDesignAsset[] = [];
+    for (const toolResult of toolResults) {
+      if (toolResult.name !== 'generate_jersey_badge') continue;
+      try {
+        const parsed = JSON.parse(toolResult.content);
+        if (typeof parsed.assetId === 'string') {
+          const asset = this.designTools.consumeGeneratedAsset(parsed.assetId);
+          if (asset) generatedAssets.push(asset);
+        }
+      } catch (error) {
+        this.logger.warn('Could not resolve generated badge asset from tool result.');
+      }
+    }
+
+    return { text, toolResults, generatedAssets };
   }
 }
