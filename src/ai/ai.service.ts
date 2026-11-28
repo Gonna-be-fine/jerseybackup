@@ -7,6 +7,7 @@ import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { PointsService } from '../points/points.service';
 import { ResourcesService } from '../resources/resources.service';
 import { JerseyDesignAgent } from '../agent/jersey-design-agent.service';
+import { JerseyDesignOutputSchema } from '../agent/schemas/jersey-design.schema';
 import { AiDesignDto } from './dto/ai-design.dto';
 import { AiLogoDto } from './dto/ai-logo.dto';
 import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
@@ -33,128 +34,6 @@ const AI_IMAGE_DEBUG_DIR = process.env.AI_IMAGE_DEBUG_DIR || 'debug-ai-images';
 if (GEMINI_PROXY_URL) {
   setGlobalDispatcher(new ProxyAgent(GEMINI_PROXY_URL));
 }
-
-const DESIGN_RESPONSE_SCHEMA = {
-  type: 'object',
-  properties: {
-    jerseyColors: {
-      type: 'object',
-      properties: {
-        COLOUR_BASE: { type: 'string' },
-        COLOUR_SECONDARY: { type: 'string' },
-        COLOUR_PRIMARY: { type: 'string' },
-        COLOUR_HEM: { type: 'string' },
-      },
-      required: ['COLOUR_BASE', 'COLOUR_SECONDARY', 'COLOUR_PRIMARY', 'COLOUR_HEM'],
-    },
-    colorsRationale: { type: 'string' },
-    texts: {
-      type: 'array',
-      minItems: 0,
-      maxItems: 2,
-      items: {
-        type: 'object',
-        properties: {
-          text: { type: 'string' },
-          fill: { type: 'string' },
-          fontFamily: {
-            type: 'string',
-            enum: ['American Captain', 'Athletic', 'Komikazoom', 'Hardsign', 'summber-bike'],
-          },
-          fontSize: { type: 'number' },
-          isCurved: { type: 'boolean' },
-          curveValue: { type: 'number' },
-          leftRatio: { type: 'number' },
-          topRatio: { type: 'number' },
-        },
-        required: [
-          'text',
-          'fill',
-          'fontFamily',
-          'fontSize',
-          'isCurved',
-          'curveValue',
-          'leftRatio',
-          'topRatio',
-        ],
-      },
-    },
-    decals: {
-      type: 'array',
-      minItems: 0,
-      maxItems: 3,
-      items: {
-        type: 'object',
-        properties: {
-          role: { type: 'string' },
-          libraryKeyword: { type: 'string' },
-          designIdea: { type: 'string' },
-          imagenPrompt: { type: 'string' },
-          leftRatio: { type: 'number' },
-          topRatio: { type: 'number' },
-          scale: { type: 'number' },
-        },
-        required: [
-          'role',
-          'libraryKeyword',
-          'designIdea',
-          'imagenPrompt',
-          'leftRatio',
-          'topRatio',
-          'scale',
-        ],
-      },
-    },
-    patterns: {
-      type: 'array',
-      minItems: 0,
-      maxItems: 2,
-      items: {
-        type: 'object',
-        properties: {
-          source: {
-            type: 'string',
-            enum: ['preset', 'generated_svg'],
-          },
-          patternId: { type: 'string' },
-          libraryKeyword: { type: 'string' },
-          brief: { type: 'string' },
-          designIdea: { type: 'string' },
-          targetMode: {
-            type: 'string',
-            enum: ['all', 'parts'],
-          },
-          targetPartIds: {
-            type: 'array',
-            items: { type: 'string' },
-          },
-          scale: { type: 'number' },
-          angle: { type: 'number' },
-          opacity: { type: 'number' },
-          offsetX: { type: 'number' },
-          offsetY: { type: 'number' },
-          patternColor: { type: 'string' },
-          bgColorMode: { type: 'string' },
-        },
-        required: [
-          'source',
-          'brief',
-          'targetMode',
-          'targetPartIds',
-          'scale',
-          'angle',
-          'opacity',
-          'offsetX',
-          'offsetY',
-          'patternColor',
-          'bgColorMode',
-        ],
-      },
-    },
-    explanation: { type: 'string' },
-  },
-  required: ['jerseyColors', 'colorsRationale', 'texts', 'decals', 'patterns', 'explanation'],
-};
 
 type GeminiPart = {
   text?: string;
@@ -439,7 +318,10 @@ The JSON shape must be:
         `Design Request: ${dto.prompt}`,
         threadId,
       );
-      return this.normalizeDesignResult(this.parseGeminiJsonObject(responseText));
+      const parsedDesign = JerseyDesignOutputSchema.parse(
+        this.parseGeminiJsonObject(responseText),
+      );
+      return this.normalizeDesignResult(parsedDesign);
     } catch (error) {
       this.logger.warn(`Zhipu LangGraph design agent failed, fallback will be used: ${this.getErrorMessage(error)}`);
       return null;
