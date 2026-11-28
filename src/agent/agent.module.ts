@@ -15,6 +15,6 @@ import { JerseyDesignTools } from './tools/jersey-design.tools';
     ZhipuChatModelProvider,
     JerseyDesignAgent,
   ],
-  exports: [JerseyBoundaryTools, JerseyDesignTools, JerseyDesignAgent],
+  exports: [JerseyBoundaryTools, JerseyDesignTools, JerseyDesignAgent, ZhipuChatModelProvider],
 })
 export class AgentModule {}
