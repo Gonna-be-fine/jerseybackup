@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { BoundaryService } from '../../boundary/boundary.service';
-import { tool } from '@langchain/core/tools';
+import { tool } from 'langchain';
 import { z } from 'zod';
 
 type JsonSchema = Record<string, unknown>;
