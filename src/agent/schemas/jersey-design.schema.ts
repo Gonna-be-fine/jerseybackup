@@ -8,9 +8,9 @@ const TextElementSchema = z.object({
   fontFamily: z
     .enum(['American Captain', 'Athletic', 'Komikazoom', 'Hardsign', 'summber-bike'])
     .optional(),
-  fontSize: z.number().finite().positive().max(200),
+  fontSize: z.number().positive().max(200),
   isCurved: z.boolean(),
-  curveValue: z.number().finite(),
+  curveValue: z.number(),
   leftRatio: z.number().min(0).max(1),
   topRatio: z.number().min(0).max(1),
 });
