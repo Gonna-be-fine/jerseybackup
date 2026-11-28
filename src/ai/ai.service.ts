@@ -8,6 +8,7 @@ import { PointsService } from '../points/points.service';
 import { ResourcesService } from '../resources/resources.service';
 import { JerseyDesignAgent } from '../agent/jersey-design-agent.service';
 import { JerseyDesignOutputSchema } from '../agent/schemas/jersey-design.schema';
+import { ImageGenerationService } from '../image-generation/image-generation.service';
 import { AiDesignDto } from './dto/ai-design.dto';
 import { AiLogoDto } from './dto/ai-logo.dto';
 import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
@@ -89,6 +90,7 @@ export class AiService {
     @InjectRepository(AiTask)
     private readonly aiTaskRepository: Repository<AiTask>,
     private readonly jerseyDesignAgent: JerseyDesignAgent,
+    private readonly imageGenerationService: ImageGenerationService,
   ) {}
 
   async generateDesign(userId: number, dto: AiDesignDto) {
@@ -862,7 +864,7 @@ Constraints:
   }
 
   private async generateImageDataUrl(prompt: string, aspectRatio: string) {
-    return this.generateImageDataUrlFromParts([{ text: prompt }], aspectRatio);
+    return this.imageGenerationService.generateImage(prompt, aspectRatio);
   }
 
   private async generateImageDataUrlFromParts(parts: GeminiPart[], aspectRatio: string) {
