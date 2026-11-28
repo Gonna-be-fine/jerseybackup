@@ -284,6 +284,14 @@ The pattern must have deliberate edge continuity: forms touching one tile edge s
         }
       }
 
+      if (['path', 'rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line'].includes(tag)) {
+        const hasVisibleFill = Boolean(attributes.fill && attributes.fill !== 'none');
+        const hasVisibleStroke = Boolean(attributes.stroke && attributes.stroke !== 'none');
+        if (!hasVisibleFill && !hasVisibleStroke) {
+          issues.push(`<${tag}> must use an editable fill or stroke color token.`);
+        }
+      }
+
       if (['rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line'].includes(tag)) {
         const numeric = (name: string, fallback = 0) =>
           attributes[name] === undefined ? fallback : Number(attributes[name]);
