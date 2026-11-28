@@ -108,6 +108,11 @@ export class JerseyDesignAgent {
     return this.graph;
   }
 
+  async getTemplateRegionIds(productType: string): Promise<string[]> {
+    const boundary = await this.boundaryTools.getJerseyBoundary({ productType });
+    return boundary.colorRegions.map((region) => region.id);
+  }
+
   async generateDesign(
     systemPrompt: string,
     userPrompt: string,
