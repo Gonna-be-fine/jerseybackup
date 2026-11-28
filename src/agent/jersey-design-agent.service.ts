@@ -36,7 +36,9 @@ export class JerseyDesignAgent {
     }
 
     const tools = this.boundaryTools.getLangChainTools();
-    const toolsByName = new Map(tools.map((item) => [item.name, item]));
+    const toolsByName = new Map<string, any>(
+      tools.map((item) => [item.name, item] as [string, any]),
+    );
     const modelWithTools = this.modelProvider.createChatModel().bindTools(tools);
 
     const callModel = async (state: typeof MessagesAnnotation.State) => {
