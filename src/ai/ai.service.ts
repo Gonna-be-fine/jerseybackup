@@ -330,7 +330,7 @@ The JSON shape must be:
         threadId,
       );
       const parsedDesign = JerseyDesignOutputSchema.parse(
-        this.parseGeminiJsonObject(agentResult.text),
+        this.parseJsonObject(agentResult.text),
       );
       const boundaryResult = agentResult.toolResults.find(
         (item) => item.name === 'get_jersey_boundary',
@@ -401,7 +401,7 @@ The JSON shape must be:
         '1:1',
       );
     } catch (error) {
-      this.logger.warn(`Gemini logo image generation failed, fallback will be used: ${this.getErrorMessage(error)}`);
+      this.logger.warn(`Image provider logo generation failed, fallback will be used: ${this.getErrorMessage(error)}`);
       return null;
     }
   }
@@ -992,7 +992,7 @@ Constraints & Code Requirements:
     return text;
   }
 
-  private parseGeminiJsonObject(text: string) {
+  private parseJsonObject(text: string) {
     const normalized = text
       .trim()
       .replace(/^```(?:json)?\s*/i, '')
@@ -1005,7 +1005,7 @@ Constraints & Code Requirements:
       return JSON.parse(jsonText);
     } catch (error) {
       const preview = jsonText.replace(/\s+/g, ' ').slice(0, 1500);
-      throw new Error(`${this.getErrorMessage(error)}. Gemini JSON preview: ${preview}`);
+      throw new Error(`${this.getErrorMessage(error)}. LLM JSON preview: ${preview}`);
     }
   }
 
