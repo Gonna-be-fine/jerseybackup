@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
+import { HumanMessage, SystemMessage } from '@langchain/core/messages';
 import { svgPathBbox } from 'svg-path-bbox';
 import { ZhipuChatModelProvider } from '../../agent/providers/zhipu-chat-model.provider';
 
@@ -143,9 +144,7 @@ export class SvgPatternPipelineService {
       : '';
 
     const response = await model.invoke([
-      {
-        role: 'system',
-        content: `You are a professional sportswear seamless-tile SVG pattern engineer.
+      new SystemMessage(`You are a professional sportswear seamless-tile SVG pattern engineer.
 Return ONLY one complete raw SVG XML document. Do not use Markdown fences or explanations.
 The tile must be visually repeatable on all four edges and suitable for high-resolution fabric printing.
 Use a 256 by 256 user-space tile with viewBox="0 0 256 256".
@@ -157,12 +156,8 @@ Do not modify any jersey template, UV, clipPath, garment boundary, or panel geom
 Keep the SVG concise (under 60 KB) and use clean path geometry.
 Avoid overly thin details: use stroke-width of at least 1.2 when strokes are needed.
 The pattern must have deliberate edge continuity: forms touching one tile edge should continue at the opposite edge with matching positions and shapes.
-`,
-      },
-      {
-        role: 'user',
-        content: `Garment type: ${state.productType}\nPattern brief: ${state.brief}\nEditable pattern color token: ${state.patternColor}\n${repairContext}Generate the complete SVG tile now.`,
-      },
+`),
+      new HumanMessage(`Garment type: ${state.productType}\nPattern brief: ${state.brief}\nEditable pattern color token: ${state.patternColor}\n${repairContext}Generate the complete SVG tile now.`),
     ]);
 
     const raw =
