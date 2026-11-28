@@ -44,7 +44,7 @@ The first registered tools inspect the actual SVG boundary and validate candidat
 
 The optional `conversationId` field on `POST /ai/design` selects a LangGraph thread scoped to the authenticated user. Reuse the same ID to continue a design conversation.
 
-The current checkpointer is `MemorySaver`, intended for local development. It loses state on process restart and is not shared across multiple backend instances. Replace it with a durable PostgreSQL checkpointer before production deployment.
+The current checkpointer is `MemorySaver`, intended for local development. It loses state on process restart and is not shared across multiple backend instances. Replace it with a durable PostgreSQL checkpointer before production deployment. Reuse the same `conversationId` in `POST /ai/design` to continue a thread; omit it to create an isolated design run.
 
 ## Install
 
@@ -74,4 +74,4 @@ COMFYUI_MAX_IMAGE_DIMENSION=1024
 COMFYUI_TIMEOUT_MS=180000
 ```
 
-Export the workflow from ComfyUI in **API format**, place the JSON file at the configured path, and set node IDs/input names to match that workflow. The positive prompt node is required. Negative prompt, seed, width, height, and output node settings are optional. Keep the workflow server-side; do not accept arbitrary workflow JSON from end users or the LLM.
+Export the workflow from ComfyUI in **API format**, place the JSON file at the configured path, and set node IDs/input names to match that workflow. The positive prompt node is required. Negative prompt, seed, width, height, and output node settings are optional. This first ComfyUI adapter supports text-to-image generation; reference-image editing for model previews remains on the Gemini path for now. Keep the workflow server-side; do not accept arbitrary workflow JSON from end users or the LLM.
