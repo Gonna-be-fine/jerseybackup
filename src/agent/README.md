@@ -49,3 +49,29 @@ The current checkpointer is `MemorySaver`, intended for local development. It lo
 ## Install
 
 After pulling the branch, run `npm install` to install the new LangChain dependencies and regenerate `package-lock.json`.
+
+## Image generation providers
+
+Text-to-image requests (such as standalone badge images) use the provider selected by `IMAGE_GENERATION_PROVIDER`:
+
+- `gemini` (default): uses `GEMINI_API_KEY` and `GEMINI_IMAGE_MODEL`.
+- `comfyui`: submits an API-format workflow to a local or remote ComfyUI server.
+
+Example ComfyUI configuration:
+
+```dotenv
+IMAGE_GENERATION_PROVIDER=comfyui
+COMFYUI_BASE_URL=http://127.0.0.1:8188
+COMFYUI_WORKFLOW_PATH=./workflows/jersey-badge-api.json
+COMFYUI_PROMPT_NODE_ID=6
+COMFYUI_PROMPT_INPUT=text
+COMFYUI_NEGATIVE_PROMPT_NODE_ID=7
+COMFYUI_NEGATIVE_PROMPT_INPUT=text
+COMFYUI_SEED_NODE_ID=3
+COMFYUI_SEED_INPUT=seed
+COMFYUI_OUTPUT_NODE_ID=9
+COMFYUI_MAX_IMAGE_DIMENSION=1024
+COMFYUI_TIMEOUT_MS=180000
+```
+
+Export the workflow from ComfyUI in **API format**, place the JSON file at the configured path, and set node IDs/input names to match that workflow. The positive prompt node is required. Negative prompt, seed, width, height, and output node settings are optional. Keep the workflow server-side; do not accept arbitrary workflow JSON from end users or the LLM.
