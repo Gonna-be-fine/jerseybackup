@@ -32,4 +32,26 @@ describe('SvgPatternPipelineService SVG validation', () => {
     expect(result.valid).toBe(false);
     expect(result.issues.join(' ')).toContain('extends more than 32 units');
   });
+
+  it('repairs an invalid SVG and validates the second generation', async () => {
+    const invalidSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><path d="M 10 10 L 40 10 L 40 40 Z" fill="var(--pattern-color, #ffffff)"/></svg>';
+    const validSvg =
+      '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256"><path d="M 10 10 L 40 10 L 40 40 Z" fill="var(--pattern-color, #ffffff)"/></svg>';
+    const model = {
+      invoke: jest
+        .fn()
+        .mockResolvedValueOnce({ content: invalidSvg })
+        .mockResolvedValueOnce({ content: validSvg }),
+    };
+    const pipeline = new SvgPatternPipelineService({
+      createChatModel: () => model,
+    } as any);
+
+    const result = await pipeline.generate({ brief: 'Diagonal speed lines' });
+
+    expect(result.attempts).toBe(2);
+    expect(result.validation.valid).toBe(true);
+    expect(model.invoke).toHaveBeenCalledTimes(2);
+  });
 });
