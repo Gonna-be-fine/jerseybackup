@@ -7,6 +7,7 @@ import { AiService } from './ai.service';
 import { AiTask } from './entities/ai-task.entity';
 import { AgentModule } from '../agent/agent.module';
 import { ImageGenerationModule } from '../image-generation/image-generation.module';
+import { SvgPatternPipelineService } from './services/svg-pattern-pipeline.service';
 
 @Module({
   imports: [
@@ -17,6 +18,6 @@ import { ImageGenerationModule } from '../image-generation/image-generation.modu
     ImageGenerationModule,
   ],
   controllers: [AiController],
-  providers: [AiService],
+  providers: [AiService, SvgPatternPipelineService],
 })
 export class AiModule {}
