@@ -74,6 +74,7 @@ type DesignPatternPlan = {
   category?: string;
   name?: string;
   generationAttempts?: number;
+  generationError?: string;
   validation?: { valid: boolean; checks: string[]; warnings: string[] };
 };
 
@@ -787,12 +788,12 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
             normalized.category = fallbackPreset.category;
             normalized.url = fallbackPreset.url;
           } else {
-            continue;
+            normalized.generationError = this.getErrorMessage(error);
           }
         }
       }
 
-      if (normalized.url) {
+      if (normalized.url || normalized.generationError) {
         resolvedPatterns.push(normalized);
       }
     }
