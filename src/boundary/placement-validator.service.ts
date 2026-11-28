@@ -3,23 +3,33 @@ import { svgPathProperties } from 'svg-path-properties';
 import { ColorRegion, SvgMatrix } from './boundary.types';
 
 export interface PlacementRectangle {
+  /** Unrotated rectangle top-left in root SVG coordinates. */
   x: number;
   y: number;
   width: number;
   height: number;
+  /** Clockwise rotation in degrees around the rectangle center. */
+  rotation?: number;
+}
+
+export interface PlacementPoint {
+  x: number;
+  y: number;
 }
 
 export interface PlacementValidationResult {
   valid: boolean;
   regionId: string;
   placement: PlacementRectangle;
+  /** Four rotated corners in root SVG coordinates, clockwise from top-left. */
+  corners: PlacementPoint[];
   reason: string | null;
   tolerance: number;
 }
 
 /**
- * Converts SVG path segments into sampled contours and checks whether an
- * axis-aligned image rectangle fits completely inside one filled contour.
+ * Checks whether an axis-aligned or rotated image rectangle fits completely
+ * inside one sampled filled SVG contour.
  *
  * This is a geometric preflight check, not a print-production guarantee:
  * holes/fill-rule semantics and fabric seam allowances need template metadata.
@@ -31,13 +41,14 @@ export class PlacementValidator {
 
   validate(region: ColorRegion, placement: PlacementRectangle): PlacementValidationResult {
     this.assertPlacement(placement);
-
+    const corners = this.rectangleCorners(placement);
     const bounds = region.geometryBounds;
-    if (!bounds || !this.rectangleInsideBounds(placement, bounds)) {
-      return this.result(false, region.id, placement, 'outside-region-bounds');
+
+    if (!bounds || !this.polygonInsideBounds(corners, bounds)) {
+      return this.result(false, region.id, placement, corners, 'outside-region-bounds');
     }
 
-    let contours: Array<Array<{ x: number; y: number }>>;
+    let contours: Array<Array<PlacementPoint>>;
     try {
       contours = this.buildContours(region.geometry, region.matrix);
     } catch {
@@ -46,39 +57,33 @@ export class PlacementValidator {
       );
     }
 
-    const corners = this.rectangleCorners(placement);
-    const fits = contours.some((contour) => this.rectangleFitsContour(corners, placement, contour));
-
+    const fits = contours.some((contour) => this.rectangleFitsContour(corners, contour));
     return this.result(
       fits,
       region.id,
       placement,
+      corners,
       fits ? null : 'rectangle-crosses-or-exceeds-path-outline',
     );
   }
 
-  private buildContours(
-    path: string,
-    matrix: SvgMatrix,
-  ): Array<Array<{ x: number; y: number }>> {
+  private buildContours(path: string, matrix: SvgMatrix): Array<Array<PlacementPoint>> {
     const properties = new svgPathProperties(path);
-    const contours: Array<Array<{ x: number; y: number }>> = [];
-    let current: Array<{ x: number; y: number }> = [];
+    const contours: Array<Array<PlacementPoint>> = [];
+    let current: PlacementPoint[] = [];
 
-    const transform = (point: { x: number; y: number }) => ({
+    const transform = (point: PlacementPoint): PlacementPoint => ({
       x: matrix.a * point.x + matrix.c * point.y + matrix.e,
       y: matrix.b * point.x + matrix.d * point.y + matrix.f,
     });
 
-    const pushPoint = (point: { x: number; y: number }) => {
+    const pushPoint = (point: PlacementPoint) => {
       const transformed = transform(point);
       const previous = current[current.length - 1];
       if (
         !previous ||
         Math.hypot(previous.x - transformed.x, previous.y - transformed.y) > this.epsilon
-      ) {
-        current.push(transformed);
-      }
+      ) current.push(transformed);
     };
 
     const finishContour = () => {
@@ -94,19 +99,15 @@ export class PlacementValidator {
     };
 
     for (const part of properties.getParts()) {
-      // A discontinuity between segment endpoints indicates a new M subpath.
       if (
         current.length &&
         Math.hypot(
           current[current.length - 1].x - transform(part.start).x,
           current[current.length - 1].y - transform(part.start).y,
         ) > this.epsilon
-      ) {
-        finishContour();
-      }
+      ) finishContour();
 
       if (!current.length) pushPoint(part.start);
-
       const steps = Math.max(1, Math.ceil(part.length / this.curveTolerance));
       for (let i = 1; i <= steps; i++) {
         pushPoint(part.getPointAtLength((part.length * i) / steps));
@@ -118,15 +119,11 @@ export class PlacementValidator {
   }
 
   private rectangleFitsContour(
-    corners: Array<{ x: number; y: number }>,
-    rectangle: PlacementRectangle,
-    contour: Array<{ x: number; y: number }>,
+    corners: PlacementPoint[],
+    contour: PlacementPoint[],
   ): boolean {
-    if (!corners.every((point) => this.pointInPolygon(point, contour))) {
-      return false;
-    }
+    if (!corners.every((point) => this.pointInPolygon(point, contour))) return false;
 
-    // Reject when any image edge crosses the actual path boundary.
     const contourEdges = this.edges(contour);
     const rectangleEdges = this.edges([...corners, corners[0]]);
     for (const [a, b] of rectangleEdges) {
@@ -135,19 +132,14 @@ export class PlacementValidator {
       }
     }
 
-    // A concave notch/void can be entirely enclosed by the image rectangle
-    // without any rectangle corner leaving the polygon.
-    if (contour.some((point) => this.pointInRectangle(point, rectangle))) {
+    // Reject a concave notch/void fully enclosed by the rotated image polygon.
+    if (contour.some((point) => this.pointInPolygon(point, [...corners, corners[0]]))) {
       return false;
     }
-
     return true;
   }
 
-  private pointInPolygon(
-    point: { x: number; y: number },
-    polygon: Array<{ x: number; y: number }>,
-  ): boolean {
+  private pointInPolygon(point: PlacementPoint, polygon: PlacementPoint[]): boolean {
     let inside = false;
     for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
       const a = polygon[i];
@@ -161,11 +153,7 @@ export class PlacementValidator {
     return inside;
   }
 
-  private pointOnSegment(
-    p: { x: number; y: number },
-    a: { x: number; y: number },
-    b: { x: number; y: number },
-  ): boolean {
+  private pointOnSegment(p: PlacementPoint, a: PlacementPoint, b: PlacementPoint): boolean {
     const cross = (p.y - a.y) * (b.x - a.x) - (p.x - a.x) * (b.y - a.y);
     if (Math.abs(cross) > this.epsilon) return false;
     const dot = (p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y);
@@ -175,10 +163,9 @@ export class PlacementValidator {
   }
 
   private segmentsIntersect(
-    a: { x: number; y: number }, b: { x: number; y: number },
-    c: { x: number; y: number }, d: { x: number; y: number },
+    a: PlacementPoint, b: PlacementPoint, c: PlacementPoint, d: PlacementPoint,
   ): boolean {
-    const orient = (p: typeof a, q: typeof a, r: typeof a) =>
+    const orient = (p: PlacementPoint, q: PlacementPoint, r: PlacementPoint) =>
       (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
     const o1 = orient(a, b, c);
     const o2 = orient(a, b, d);
@@ -196,52 +183,55 @@ export class PlacementValidator {
     );
   }
 
-  private edges(points: Array<{ x: number; y: number }>) {
-    const edges: Array<[typeof points[number], typeof points[number]]> = [];
+  private edges(points: PlacementPoint[]): Array<[PlacementPoint, PlacementPoint]> {
+    const edges: Array<[PlacementPoint, PlacementPoint]> = [];
     for (let i = 0; i < points.length - 1; i++) edges.push([points[i], points[i + 1]]);
     return edges;
   }
 
-  private rectangleCorners(rectangle: PlacementRectangle) {
+  private rectangleCorners(rectangle: PlacementRectangle): PlacementPoint[] {
     const { x, y, width, height } = rectangle;
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const radians = ((rectangle.rotation ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
     return [
       { x, y },
       { x: x + width, y },
       { x: x + width, y: y + height },
       { x, y: y + height },
-    ];
+    ].map((point) => ({
+      x: cx + (point.x - cx) * cos - (point.y - cy) * sin,
+      y: cy + (point.x - cx) * sin + (point.y - cy) * cos,
+    }));
   }
 
-  private rectangleInsideBounds(
-    rectangle: PlacementRectangle,
+  private polygonInsideBounds(
+    points: PlacementPoint[],
     bounds: { x: number; y: number; width: number; height: number },
   ): boolean {
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
     return (
-      rectangle.x >= bounds.x - this.epsilon &&
-      rectangle.y >= bounds.y - this.epsilon &&
-      rectangle.x + rectangle.width <= bounds.x + bounds.width + this.epsilon &&
-      rectangle.y + rectangle.height <= bounds.y + bounds.height + this.epsilon
-    );
-  }
-
-  private pointInRectangle(point: { x: number; y: number }, rectangle: PlacementRectangle) {
-    return (
-      point.x > rectangle.x + this.epsilon &&
-      point.x < rectangle.x + rectangle.width - this.epsilon &&
-      point.y > rectangle.y + this.epsilon &&
-      point.y < rectangle.y + rectangle.height - this.epsilon
+      Math.min(...xs) >= bounds.x - this.epsilon &&
+      Math.min(...ys) >= bounds.y - this.epsilon &&
+      Math.max(...xs) <= bounds.x + bounds.width + this.epsilon &&
+      Math.max(...ys) <= bounds.y + bounds.height + this.epsilon
     );
   }
 
   private assertPlacement(rectangle: PlacementRectangle): void {
-    const values = [rectangle.x, rectangle.y, rectangle.width, rectangle.height];
+    const values = [
+      rectangle.x, rectangle.y, rectangle.width, rectangle.height, rectangle.rotation ?? 0,
+    ];
     if (
       values.some((value) => !Number.isFinite(value)) ||
       rectangle.width <= 0 ||
       rectangle.height <= 0
     ) {
       throw new BadRequestException(
-        'Placement x/y must be finite and width/height must be positive.',
+        'Placement x/y/rotation must be finite and width/height must be positive.',
       );
     }
   }
@@ -250,12 +240,14 @@ export class PlacementValidator {
     valid: boolean,
     regionId: string,
     placement: PlacementRectangle,
+    corners: PlacementPoint[],
     reason: string | null,
   ): PlacementValidationResult {
     return {
       valid,
       regionId,
-      placement,
+      placement: { ...placement, rotation: placement.rotation ?? 0 },
+      corners,
       reason,
       tolerance: this.curveTolerance,
     };
