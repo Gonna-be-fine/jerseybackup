@@ -79,6 +79,7 @@ export class BoundaryService {
       y: input.y,
       width: input.width,
       height: input.height,
+      rotation: input.rotation,
     });
   }
 
