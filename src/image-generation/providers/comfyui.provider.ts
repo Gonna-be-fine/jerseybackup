@@ -83,12 +83,17 @@ export class ComfyUiProvider implements OnModuleDestroy {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt: workflow, client_id: clientId }),
     });
-    const submitBody = await submitResponse.json();
-    if (!submitResponse.ok || !submitBody?.prompt_id) {
+    const submitBody = (await submitResponse.json()) as {
+      prompt_id?: string;
+      error?: string | { message?: string };
+    };
+    const submitError =
+      typeof submitBody.error === 'string'
+        ? submitBody.error
+        : submitBody.error?.message;
+    if (!submitResponse.ok || !submitBody.prompt_id) {
       throw new Error(
-        submitBody?.error?.message ||
-          submitBody?.error ||
-          `ComfyUI prompt submission failed: ${submitResponse.status}`,
+        submitError || `ComfyUI prompt submission failed: ${submitResponse.status}`,
       );
     }
 
