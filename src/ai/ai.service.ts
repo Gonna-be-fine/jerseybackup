@@ -239,7 +239,11 @@ export class AiService {
       }
     }
 
-    result.patterns = await this.resolveDesignPatterns(result.patterns || [], dto);
+    result.patterns = await this.resolveDesignPatterns(
+      result.patterns || [],
+      dto,
+      new Set(Object.keys(result.jerseyColors || {})),
+    );
 
     if (dto.generateCustomDecal) {
       const primaryBadgeDecal =
@@ -289,7 +293,7 @@ Fonts must be one of: American Captain, Athletic, Komikazoom, Hardsign, summber-
 The garment productType is "${productType}".
 Available editable color parts: ${colorPartSummary || 'COLOUR_BASE, COLOUR_PRIMARY, COLOUR_SECONDARY, COLOUR_HEM'}.
 Actual SVG boundary information: not yet inspected. You MUST call get_jersey_boundary before finalizing the design. Use only IDs returned by that tool. For any proposed decal placement, call validate_image_placement and revise invalid placements.
-Only use region IDs that exist in the actual template; do not assume every semantic ColorPrevList ID exists.
+Only use region IDs that exist in the actual template; do not assume every semantic ColorPrevList ID exists. The jerseyColors object must contain only actual color-region IDs returned by get_jersey_boundary; omit missing IDs such as COLOUR_HEM when the template does not contain them.
 Current part colors: ${currentColorsSummary || 'not provided'}.
 Primary text already on garment: ${dto.primaryText || 'none'}.
 Available reusable preset patterns: ${patternSummary || 'none, AI may choose generated_svg when a custom repeat pattern is needed'}.
@@ -301,7 +305,7 @@ When targetMode is all, targetPartIds must be an empty array. When targetMode is
 Decals must include role, libraryKeyword, designIdea in Chinese, imagenPrompt, leftRatio, topRatio, scale.
 The JSON shape must be:
 {
-  "jerseyColors": {"COLOUR_BASE":"#hex","COLOUR_SECONDARY":"#hex","COLOUR_PRIMARY":"#hex","COLOUR_HEM":"#hex"},
+  "jerseyColors": {"COLOUR_BASE":"#hex","COLOUR_PRIMARY":"#hex"},
   "colorsRationale": "Chinese sentence",
   "texts": [{"text":"...","fill":"#hex","fontFamily":"...","fontSize":44,"isCurved":true,"curveValue":30,"leftRatio":0.5,"topRatio":0.54}],
   "decals": [{"role":"primary_badge","libraryKeyword":"star","designIdea":"...","imagenPrompt":"...","leftRatio":0.33,"topRatio":0.42,"scale":0.65}],
@@ -313,15 +317,25 @@ The JSON shape must be:
       const threadId = dto.conversationId
         ? `user-${userId}-design-${dto.conversationId}`
         : `user-${userId}-design-${taskId}`;
-      const responseText = await this.jerseyDesignAgent.generateDesign(
+      const agentResult = await this.jerseyDesignAgent.generateDesign(
         systemInstruction,
         `Design Request: ${dto.prompt}`,
         threadId,
       );
       const parsedDesign = JerseyDesignOutputSchema.parse(
-        this.parseGeminiJsonObject(responseText),
+        this.parseGeminiJsonObject(agentResult.text),
       );
-      return this.normalizeDesignResult(parsedDesign);
+      const boundaryResult = agentResult.toolResults.find(
+        (item) => item.name === 'get_jersey_boundary',
+      );
+      const allowedRegionIds = boundaryResult
+        ? new Set(
+            (JSON.parse(boundaryResult.content)?.colorRegions || []).map(
+              (region: { id: string }) => region.id,
+            ),
+          )
+        : undefined;
+      return this.normalizeDesignResult(parsedDesign, allowedRegionIds);
     } catch (error) {
       this.logger.warn(`Zhipu LangGraph design agent failed, fallback will be used: ${this.getErrorMessage(error)}`);
       return null;
@@ -532,7 +546,7 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
     };
   }
 
-  private normalizeDesignResult(result: any) {
+  private normalizeDesignResult(result: any, allowedRegionIds?: Set<string>) {
     if (
       !result?.jerseyColors ||
       !Array.isArray(result.texts) ||
@@ -543,12 +557,12 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
     }
 
     return {
-      jerseyColors: {
-        COLOUR_BASE: result.jerseyColors.COLOUR_BASE || '#f5f5f7',
-        COLOUR_SECONDARY: result.jerseyColors.COLOUR_SECONDARY || '#1c1c1e',
-        COLOUR_PRIMARY: result.jerseyColors.COLOUR_PRIMARY || '#651fff',
-        COLOUR_HEM: result.jerseyColors.COLOUR_HEM || '#1c1c1e',
-      },
+      jerseyColors: Object.fromEntries(
+        Object.entries(result.jerseyColors).filter(([regionId, color]) =>
+          this.isHexColor(String(color)) &&
+          (!allowedRegionIds || allowedRegionIds.has(regionId)),
+        ),
+      ),
       colorsRationale: result.colorsRationale || '',
       texts: result.texts.slice(0, 2).map((text) => ({
         text: String(text.text || 'TEAM').slice(0, 20),
@@ -600,12 +614,16 @@ Critical icon placement rule: every logo, crest, badge, emblem, and decorative i
   private async resolveDesignPatterns(
     patterns: DesignPatternPlan[],
     dto: AiDesignDto,
+    inferredPartIds: Set<string> = new Set(),
   ): Promise<DesignPatternPlan[]> {
     if (!Array.isArray(patterns) || !patterns.length) {
       return [];
     }
 
     const availablePartIds = new Set((dto.availableColorParts || []).map((part) => part.id));
+    if (!availablePartIds.size) {
+      for (const partId of inferredPartIds) availablePartIds.add(partId);
+    }
     const availablePatterns = Array.isArray(dto.availablePatterns) ? dto.availablePatterns : [];
     const resolvedPatterns: DesignPatternPlan[] = [];
 
