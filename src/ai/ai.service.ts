@@ -13,12 +13,14 @@ import { SvgPatternPipelineService } from './services/svg-pattern-pipeline.servi
 import { AiDesignDto } from './dto/ai-design.dto';
 import { AiLogoDto } from './dto/ai-logo.dto';
 import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
+import { AiPatternGenerateDto } from './dto/ai-pattern-generate.dto';
 import { AiTask } from './entities/ai-task.entity';
 
 const AI_COSTS = {
   design: 8,
   logo: 16,
   modelPreview: 25,
+  pattern: 8,
 }; 
 
 const GEMINI_TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || 'gemini-3.1-flash-lite';
@@ -117,6 +119,40 @@ export class AiService {
     } catch (error) {
       if (charged) {
         await this.refundForFailedTask(userId, AI_COSTS.design, 'ai_design');
+      }
+      await this.failTask(task, error);
+      throw error;
+    }
+  }
+
+  async generatePattern(userId: number, dto: AiPatternGenerateDto) {
+    const task = await this.createTask(userId, 'ai_pattern', dto.brief, AI_COSTS.pattern);
+    let charged = false;
+
+    try {
+      await this.chargeForTask(userId, AI_COSTS.pattern, 'ai_pattern');
+      charged = true;
+
+      const generated = await this.svgPatternPipeline.generate(dto);
+      const svgDataUrl = `data:image/svg+xml;base64,${Buffer.from(generated.svg, 'utf8').toString('base64')}`;
+      const result = {
+        source: 'generated_svg' as const,
+        svg: generated.svg,
+        url: svgDataUrl,
+        generationAttempts: generated.attempts,
+        validation: generated.validation,
+      };
+      await this.completeTask(task, result);
+
+      const balance = await this.pointsService.getBalance(userId);
+      return {
+        costPoints: AI_COSTS.pattern,
+        pointsBalance: balance.pointsBalance,
+        result,
+      };
+    } catch (error) {
+      if (charged) {
+        await this.refundForFailedTask(userId, AI_COSTS.pattern, 'ai_pattern');
       }
       await this.failTask(task, error);
       throw error;
