@@ -389,7 +389,7 @@ The JSON shape must be:
   }
 
   private async tryBuildRealLogoImage(dto: AiLogoDto) {
-    if (!this.hasGeminiKey()) return null;
+    if (!this.hasImageGenerationConfig()) return null;
 
     const stylePrompt = dto.style ? `Logo style preset: ${dto.style}. ` : '';
     const colorContext = dto.inheritColors
@@ -1074,6 +1074,17 @@ Constraints & Code Requirements:
 
   private hasGeminiKey() {
     return Boolean(process.env.GEMINI_API_KEY?.trim());
+  }
+
+  private hasImageGenerationConfig() {
+    const provider = (process.env.IMAGE_GENERATION_PROVIDER || 'gemini').toLowerCase();
+    if (provider === 'comfyui') {
+      return Boolean(process.env.COMFYUI_WORKFLOW_PATH?.trim());
+    }
+    if (provider === 'gemini') {
+      return this.hasGeminiKey();
+    }
+    return true;
   }
 
   private hasZhipuKey() {
