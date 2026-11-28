@@ -9,7 +9,7 @@ export class ImageGenerationService {
     private readonly comfyUiProvider: ComfyUiProvider,
   ) {}
 
-  generateImage(prompt: string, aspectRatio: string): Promise<string> {
+  async generateImage(prompt: string, aspectRatio: string): Promise<string> {
     const provider = (
       process.env.IMAGE_GENERATION_PROVIDER || 'gemini'
     ).toLowerCase();
