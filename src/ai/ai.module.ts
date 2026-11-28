@@ -6,6 +6,7 @@ import { AiController } from './ai.controller';
 import { AiService } from './ai.service';
 import { AiTask } from './entities/ai-task.entity';
 import { AgentModule } from '../agent/agent.module';
+import { ImageGenerationModule } from '../image-generation/image-generation.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { AgentModule } from '../agent/agent.module';
     PointsModule,
     ResourcesModule,
     AgentModule,
+    ImageGenerationModule,
   ],
   controllers: [AiController],
   providers: [AiService],
