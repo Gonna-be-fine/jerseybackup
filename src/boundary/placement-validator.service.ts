@@ -122,20 +122,32 @@ export class PlacementValidator {
     corners: PlacementPoint[],
     contour: PlacementPoint[],
   ): boolean {
-    if (!corners.every((point) => this.pointInPolygon(point, contour))) return false;
+    const rectangle = [...corners, corners[0]];
 
-    const contourEdges = this.edges(contour);
-    const rectangleEdges = this.edges([...corners, corners[0]]);
-    for (const [a, b] of rectangleEdges) {
-      for (const [c, d] of contourEdges) {
-        if (this.segmentsIntersect(a, b, c, d)) return false;
+    // Sample every rectangle edge. This catches an edge that exits and re-enters
+    // a concave contour even when both rectangle endpoints happen to be inside.
+    for (let edgeIndex = 0; edgeIndex < corners.length; edgeIndex += 1) {
+      const start = corners[edgeIndex];
+      const end = corners[(edgeIndex + 1) % corners.length];
+      const edgeLength = Math.hypot(end.x - start.x, end.y - start.y);
+      const steps = Math.max(1, Math.ceil(edgeLength / this.curveTolerance));
+
+      for (let step = 0; step <= steps; step += 1) {
+        const ratio = step / steps;
+        const point = {
+          x: start.x + (end.x - start.x) * ratio,
+          y: start.y + (end.y - start.y) * ratio,
+        };
+        if (!this.pointInPolygon(point, contour)) return false;
       }
     }
 
-    // Reject a concave notch/void fully enclosed by the rotated image polygon.
-    if (contour.some((point) => this.pointInPolygon(point, [...corners, corners[0]]))) {
+    // Reject a concave notch/void fully enclosed by the image rectangle.
+    // Boundary contact is rejected as well, preserving the conservative policy.
+    if (contour.some((point) => this.pointInPolygon(point, rectangle))) {
       return false;
     }
+
     return true;
   }
 
@@ -190,6 +202,69 @@ export class PlacementValidator {
   }
 
   private rectangleCorners(rectangle: PlacementRectangle): PlacementPoint[] {
+    const { x, y, width, height } = rectangle;
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const radians = ((rectangle.rotation ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(radians);
+    const sin = Math.sin(radians);
+    return [
+      { x, y },
+      { x: x + width, y },
+      { x: x + width, y: y + height },
+      { x, y: y + height },
+    ].map((point) => ({
+      x: cx + (point.x - cx) * cos - (point.y - cy) * sin,
+      y: cy + (point.x - cx) * sin + (point.y - cy) * cos,
+    }));
+  }
+
+  private polygonInsideBounds(
+    points: PlacementPoint[],
+    bounds: { x: number; y: number; width: number; height: number },
+  ): boolean {
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    return (
+      Math.min(...xs) >= bounds.x - this.epsilon &&
+      Math.min(...ys) >= bounds.y - this.epsilon &&
+      Math.max(...xs) <= bounds.x + bounds.width + this.epsilon &&
+      Math.max(...ys) <= bounds.y + bounds.height + this.epsilon
+    );
+  }
+
+  private assertPlacement(rectangle: PlacementRectangle): void {
+    const values = [
+      rectangle.x, rectangle.y, rectangle.width, rectangle.height, rectangle.rotation ?? 0,
+    ];
+    if (
+      values.some((value) => !Number.isFinite(value)) ||
+      rectangle.width <= 0 ||
+      rectangle.height <= 0
+    ) {
+      throw new BadRequestException(
+        'Placement x/y/rotation must be finite and width/height must be positive.',
+      );
+    }
+  }
+
+  private result(
+    valid: boolean,
+    regionId: string,
+    placement: PlacementRectangle,
+    corners: PlacementPoint[],
+    reason: string | null,
+  ): PlacementValidationResult {
+    return {
+      valid,
+      regionId,
+      placement: { ...placement, rotation: placement.rotation ?? 0 },
+      corners,
+      reason,
+      tolerance: this.curveTolerance,
+    };
+  }
+}  private rectangleCorners(rectangle: PlacementRectangle): PlacementPoint[] {
     const { x, y, width, height } = rectangle;
     const cx = x + width / 2;
     const cy = y + height / 2;
