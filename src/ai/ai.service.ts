@@ -241,10 +241,36 @@ export class AiService {
       }
     }
 
-    const actualRegionIds = Array.isArray(result._actualRegionIds)
+    let actualRegionIds = Array.isArray(result._actualRegionIds)
       ? new Set<string>(result._actualRegionIds)
-      : new Set<string>(Object.keys(result.jerseyColors || {}));
+      : new Set<string>();
+
+    // The deterministic fallback path still validates its color keys against
+    // the real template, even when no LLM API key is configured.
+    if (!actualRegionIds.size) {
+      try {
+        actualRegionIds = new Set(
+          await this.jerseyDesignAgent.getTemplateRegionIds(
+            dto.productType || 'sportswear',
+          ),
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Could not inspect fallback template regions: ${this.getErrorMessage(error)}`,
+        );
+        actualRegionIds = new Set(Object.keys(result.jerseyColors || {}));
+      }
+    }
     delete result._actualRegionIds;
+
+    result.jerseyColors = Object.fromEntries(
+      Object.entries(result.jerseyColors || {}).filter(([regionId]) =>
+        actualRegionIds.has(regionId),
+      ),
+    );
+    if (actualRegionIds.has('COLOUR_BASE') && !result.jerseyColors.COLOUR_BASE) {
+      result.jerseyColors.COLOUR_BASE = '#f5f5f7';
+    }
 
     result.patterns = await this.resolveDesignPatterns(
       result.patterns || [],
