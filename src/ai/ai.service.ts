@@ -6,7 +6,7 @@ import { Repository } from 'typeorm';
 import { ProxyAgent, setGlobalDispatcher } from 'undici';
 import { PointsService } from '../points/points.service';
 import { ResourcesService } from '../resources/resources.service';
-import { JerseyBoundaryTools } from './tools/jersey-boundary.tools';
+import { JerseyDesignAgent } from '../agent/jersey-design-agent.service';
 import { AiDesignDto } from './dto/ai-design.dto';
 import { AiLogoDto } from './dto/ai-logo.dto';
 import { AiModelPreviewDto } from './dto/ai-model-preview.dto';
@@ -209,7 +209,7 @@ export class AiService {
     private readonly resourcesService: ResourcesService,
     @InjectRepository(AiTask)
     private readonly aiTaskRepository: Repository<AiTask>,
-    private readonly jerseyBoundaryTools: JerseyBoundaryTools,
+    private readonly jerseyDesignAgent: JerseyDesignAgent,
   ) {}
 
   async generateDesign(userId: number, dto: AiDesignDto) {
@@ -220,7 +220,7 @@ export class AiService {
       await this.chargeForTask(userId, AI_COSTS.design, 'ai_design');
       charged = true;
 
-      const result = await this.buildDesignResult(dto);
+      const result = await this.buildDesignResult(dto, userId, String(task.id));
       await this.completeTask(task, result);
 
       const balance = await this.pointsService.getBalance(userId);
@@ -346,8 +346,8 @@ export class AiService {
     await this.aiTaskRepository.save(task);
   }
 
-  private async buildDesignResult(dto: AiDesignDto) {
-    let result: any = await this.tryBuildRealDesignResult(dto);
+  private async buildDesignResult(dto: AiDesignDto, userId: number, taskId: string) {
+    let result: any = await this.tryBuildRealDesignResult(dto, userId, taskId);
     if (!result) {
       result = await this.buildFallbackDesignResult(dto);
     }
@@ -377,11 +377,10 @@ export class AiService {
     return result;
   }
 
-  private async tryBuildRealDesignResult(dto: AiDesignDto) {
-    if (!this.hasGeminiKey()) return null;
+  private async tryBuildRealDesignResult(dto: AiDesignDto, userId: number, taskId: string) {
+    if (!this.hasZhipuKey()) return null;
 
     const productType = dto.productType || 'sportswear';
-    const boundaryAgentContext = await this.runBoundaryToolAgent(dto);
     const colorPartSummary = (dto.availableColorParts || [])
       .map(
         (part) =>
@@ -410,7 +409,7 @@ Typography coordinates use leftRatio/topRatio from 0.1 to 0.9. Main titles usual
 Fonts must be one of: American Captain, Athletic, Komikazoom, Hardsign, summber-bike.
 The garment productType is "${productType}".
 Available editable color parts: ${colorPartSummary || 'COLOUR_BASE, COLOUR_PRIMARY, COLOUR_SECONDARY, COLOUR_HEM'}.
-Actual SVG boundary information and tool-validated candidate placements: ${boundaryAgentContext || 'not available'}.
+Actual SVG boundary information: not yet inspected. You MUST call get_jersey_boundary before finalizing the design. Use only IDs returned by that tool. For any proposed decal placement, call validate_image_placement and revise invalid placements.
 Only use region IDs that exist in the actual template; do not assume every semantic ColorPrevList ID exists.
 Current part colors: ${currentColorsSummary || 'not provided'}.
 Primary text already on garment: ${dto.primaryText || 'none'}.
@@ -432,17 +431,17 @@ The JSON shape must be:
 }`;
 
     try {
-      const response = await this.generateGeminiContent(GEMINI_TEXT_MODEL, [
-        { text: `${systemInstruction}\n\nDesign Request: ${dto.prompt}` },
-      ], {
-        responseMimeType: 'application/json',
-        responseSchema: DESIGN_RESPONSE_SCHEMA,
-        maxOutputTokens: 2048,
-      });
-      const text = this.extractText(response);
-      return this.normalizeDesignResult(this.parseGeminiJsonObject(text));
+      const threadId = dto.conversationId
+        ? `user-${userId}-design-${dto.conversationId}`
+        : `user-${userId}-design-${taskId}`;
+      const responseText = await this.jerseyDesignAgent.generateDesign(
+        systemInstruction,
+        `Design Request: ${dto.prompt}`,
+        threadId,
+      );
+      return this.normalizeDesignResult(this.parseGeminiJsonObject(responseText));
     } catch (error) {
-      this.logger.warn(`Gemini design generation failed, fallback will be used: ${this.getErrorMessage(error)}`);
+      this.logger.warn(`Zhipu LangGraph design agent failed, fallback will be used: ${this.getErrorMessage(error)}`);
       return null;
     }
   }
@@ -1032,99 +1031,6 @@ Constraints & Code Requirements:
     return 'png';
   }
 
-  /**
-   * Runs a bounded Gemini function-calling loop. The model chooses when to
-   * inspect the SVG template and validate candidate placements; tool execution
-   * stays inside the backend and never goes through the HTTP controller.
-   */
-  private async runBoundaryToolAgent(dto: AiDesignDto): Promise<string | null> {
-    if (!this.hasGeminiKey()) return null;
-
-    const productType = dto.productType || 'sportswear';
-    const contents: Array<{ role: string; parts: GeminiPart[] }> = [
-      {
-        role: 'user',
-        parts: [{
-          text: `You are the layout-planning agent for a customizable sports jersey.
-Customer design request: ${dto.prompt}
-Template type: ${productType}
-
-You have backend tools for reading the actual SVG template and validating image placements.
-You MUST call get_jersey_boundary first. Never assume a color-region ID exists based only on a semantic naming convention.
-After reading the template, decide whether this request needs a badge, logo, mascot, or other decal. If it does, choose a plausible editable region and a conservative candidate rectangle based on that region's returned bounds, then call validate_image_placement. If validation fails, adjust the candidate and retry at most twice.
-Do not invent SVG coordinates before reading the boundary. Do not return raw SVG path data. Finish with a concise summary of actual region IDs and any validated candidate placements.`,
-        }],
-      },
-    ];
-
-    const toolResults: Array<{ name: string; result: unknown }> = [];
-    const declarations = this.jerseyBoundaryTools.getFunctionDeclarations();
-
-    try {
-      for (let turn = 0; turn < 6; turn += 1) {
-        const url = `${GEMINI_API_BASE}/models/${GEMINI_TEXT_MODEL}:generateContent?key=${process.env.GEMINI_API_KEY}`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents,
-            tools: [{ functionDeclarations: declarations }],
-            toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
-            generationConfig: { maxOutputTokens: 1536 },
-          }),
-        });
-
-        const body = await response.json();
-        if (!response.ok) {
-          throw new Error(body?.error?.message || `Gemini tool request failed: ${response.status}`);
-        }
-
-        const candidate = body?.candidates?.[0]?.content;
-        const parts: GeminiPart[] = candidate?.parts || [];
-        const functionCalls = parts.filter((part) => part.functionCall?.name);
-
-        if (!functionCalls.length) {
-          const summary = parts.map((part) => part.text || '').join('').trim();
-          if (!toolResults.length) return null;
-          return JSON.stringify({ toolResults, agentSummary: summary || null });
-        }
-
-        // Preserve the model's functionCall message in the next request.
-        contents.push(candidate);
-        const functionResponses: GeminiPart[] = [];
-
-        for (const part of functionCalls) {
-          const call = part.functionCall!;
-          try {
-            const result = await this.jerseyBoundaryTools.execute(call.name, call.args || {});
-            toolResults.push({ name: call.name, result });
-            functionResponses.push({
-              functionResponse: { name: call.name, response: { result } },
-            });
-          } catch (error) {
-            const message = this.getErrorMessage(error);
-            toolResults.push({ name: call.name, result: { error: message } });
-            functionResponses.push({
-              functionResponse: { name: call.name, response: { error: message } },
-            });
-          }
-        }
-
-        contents.push({ role: 'user', parts: functionResponses });
-      }
-
-      return JSON.stringify({
-        toolResults,
-        warning: 'Tool-call iteration limit reached before the model completed its summary.',
-      });
-    } catch (error) {
-      this.logger.warn(
-        `Jersey boundary tool agent unavailable; continuing without boundary context: ${this.getErrorMessage(error)}`,
-      );
-      return null;
-    }
-  }
-
   private async generateGeminiContent(model: string, parts: GeminiPart[], config: Record<string, unknown> = {}) {
     if (!this.hasGeminiKey()) {
       throw new BadRequestException('后端未配置 GEMINI_API_KEY');
@@ -1245,6 +1151,10 @@ Do not invent SVG coordinates before reading the boundary. Do not return raw SVG
 
   private hasGeminiKey() {
     return Boolean(process.env.GEMINI_API_KEY?.trim());
+  }
+
+  private hasZhipuKey() {
+    return Boolean(process.env.ZHIPUAI_API_KEY?.trim() && process.env.ZHIPU_MODEL?.trim());
   }
 
   private getErrorMessage(error: unknown) {
