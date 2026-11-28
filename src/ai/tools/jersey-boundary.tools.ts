@@ -35,7 +35,7 @@ export class JerseyBoundaryTools {
         description:
           'Read the actual jersey SVG template. Returns existing editable color-region IDs, image slots, text groups, and their bounds in root SVG viewBox coordinates. Always call this before planning placements. Never assume a semantic color ID exists.',
         schema: z.object({
-          productType: z.string().trim().min(1).max(100),
+          productType: z.string().min(1).max(100),
         }),
       },
     );
@@ -58,13 +58,13 @@ export class JerseyBoundaryTools {
         description:
           'Validate whether a rectangular decal/image placement fits completely inside an actual editable SVG color region. Coordinates use root SVG viewBox units. Call this after reading the template boundary; if invalid, adjust the rectangle and retry.',
         schema: z.object({
-          productType: z.string().trim().min(1).max(100),
-          targetRegion: z.string().trim().min(1).max(128),
+          productType: z.string().min(1).max(100),
+          targetRegion: z.string().min(1).max(128),
           x: z.number().finite(),
           y: z.number().finite(),
           width: z.number().positive(),
           height: z.number().positive(),
-          rotation: z.number().finite().default(0),
+          rotation: z.number().optional(),
         }),
       },
     );
