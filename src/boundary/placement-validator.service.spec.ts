@@ -36,8 +36,8 @@ describe('PlacementValidator', () => {
 
   it('rejects a rotated rectangle whose corner crosses the actual path outline', () => {
     const result = validator.validate(
-      region('M0 0 H100 V100 H0 Z'),
-      { x: 5, y: 35, width: 40, height: 30, rotation: 45 },
+      region('M0 0 L100 0 L50 100 Z'),
+      { x: 40, y: 60, width: 30, height: 20, rotation: 45 },
     );
     expect(result.valid).toBe(false);
     expect(result.reason).toBe('rectangle-crosses-or-exceeds-path-outline');
