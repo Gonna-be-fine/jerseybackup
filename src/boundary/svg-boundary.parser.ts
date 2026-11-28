@@ -1,4 +1,5 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { svgPathBbox } from 'svg-path-bbox';
 import {
   BoundaryContext,
   ColorRegion,
@@ -146,30 +147,62 @@ export class SvgBoundaryParser {
   private extractColorRegions(root: SvgNode): ColorRegion[] {
     const regions: ColorRegion[] = [];
 
-    this.walk(root, (node) => {
-      if (node.tag !== 'path') return;
-      const id = node.attributes.id;
-      if (!id?.startsWith('COLOUR_')) return;
+    const visit = (node: SvgNode, parentMatrix: SvgMatrix) => {
+      const localMatrix = this.parseTransform(node.attributes.transform);
+      const worldMatrix = this.multiplyMatrices(parentMatrix, localMatrix);
 
-      const metadata = COLOR_REGION_METADATA[id] || {
-        name: id,
-        ename: id,
-      };
+      if (node.tag === 'path') {
+        const id = node.attributes.id;
+        const geometry = node.attributes.d;
+        if (id?.startsWith('COLOUR_') && geometry) {
+          const metadata = COLOR_REGION_METADATA[id] || {
+            name: id,
+            ename: id,
+          };
 
-      regions.push({
-        id,
-        name: metadata.name,
-        ename: metadata.ename,
-        side: id.endsWith('_REVERSE')
-          ? 'back'
-          : id.includes('_REVERSE_')
-            ? 'back'
-            : 'front',
-        fill: node.attributes.fill || null,
-        geometry: node.attributes.d || '',
-      });
-    });
+          let geometryBounds: ColorRegion['geometryBounds'] = null;
+          try {
+            const [minX, minY, maxX, maxY] = svgPathBbox(geometry);
+            const localBounds = {
+              x: minX,
+              y: minY,
+              width: maxX - minX,
+              height: maxY - minY,
+            };
+            geometryBounds = this.transformRectangle(
+              worldMatrix,
+              localBounds.width,
+              localBounds.height,
+              localBounds.x,
+              localBounds.y,
+            );
+          } catch {
+            throw new BadRequestException(
+              `Unable to calculate SVG geometry bounds for color region "${id}".`,
+            );
+          }
 
+          regions.push({
+            id,
+            name: metadata.name,
+            ename: metadata.ename,
+            side: id.endsWith('_REVERSE') || id.includes('_REVERSE_')
+              ? 'back'
+              : 'front',
+            fill: node.attributes.fill || null,
+            geometry,
+            geometryBounds,
+            matrix: worldMatrix,
+          });
+        }
+      }
+
+      for (const child of node.children) {
+        visit(child, worldMatrix);
+      }
+    };
+
+    visit(root, IDENTITY_MATRIX);
     return regions;
   }
 
@@ -372,12 +405,14 @@ export class SvgBoundaryParser {
     matrix: SvgMatrix,
     width: number,
     height: number,
+    x = 0,
+    y = 0,
   ): { x: number; y: number; width: number; height: number } {
     const points = [
-      this.transformPoint(matrix, 0, 0),
-      this.transformPoint(matrix, width, 0),
-      this.transformPoint(matrix, 0, height),
-      this.transformPoint(matrix, width, height),
+      this.transformPoint(matrix, x, y),
+      this.transformPoint(matrix, x + width, y),
+      this.transformPoint(matrix, x, y + height),
+      this.transformPoint(matrix, x + width, y + height),
     ];
     const xs = points.map((point) => point.x);
     const ys = points.map((point) => point.y);
