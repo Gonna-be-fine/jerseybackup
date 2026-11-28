@@ -233,6 +233,22 @@ export class AiService {
       result = await this.buildFallbackDesignResult(dto);
     }
 
+    const generatedAssets = Array.isArray(result._generatedAssets)
+      ? result._generatedAssets
+      : [];
+    delete result._generatedAssets;
+
+    const generatedBadge = generatedAssets.find(
+      (asset: { mimeType?: string; dataUrl?: string }) =>
+        typeof asset.dataUrl === 'string' && asset.dataUrl.startsWith('data:image/'),
+    );
+    if (generatedBadge) {
+      result.generatedBadgeImage = generatedBadge.dataUrl;
+      result.generatedBadgeFormat = generatedBadge.mimeType?.includes('svg')
+        ? 'svg'
+        : 'png';
+    }
+
     if (Array.isArray(result.decals)) {
       for (const decal of result.decals) {
         if (decal.libraryKeyword) {
@@ -278,7 +294,7 @@ export class AiService {
       actualRegionIds,
     );
 
-    if (dto.generateCustomDecal) {
+    if (dto.generateCustomDecal && !result.generatedBadgeImage) {
       const primaryBadgeDecal =
         result.decals?.find((decal) => decal.role === 'primary_badge') || result.decals?.[0];
       if (primaryBadgeDecal?.imagenPrompt) {
@@ -335,7 +351,7 @@ Use decals for badges, mascots, crests, emblems, sponsors, and symbolic chest gr
 Patterns must include source, patternId when using source preset, libraryKeyword, brief, designIdea in Chinese, targetMode, targetPartIds, scale, angle, opacity, offsetX, offsetY, patternColor, bgColorMode.
 If a custom repeat texture is required and presets are not a good match, use source generated_svg.
 When targetMode is all, targetPartIds must be an empty array. When targetMode is parts, targetPartIds must be chosen only from available editable color parts.
-Decals must include role, libraryKeyword, designIdea in Chinese, imagenPrompt, leftRatio, topRatio, scale.
+Decals must include role, libraryKeyword, designIdea in Chinese, imagenPrompt, leftRatio, topRatio, scale. You may call search_jersey_assets to find reusable library artwork. Custom badge generation requested: ${dto.generateCustomDecal ? 'YES - call generate_jersey_badge for the primary badge after deciding its visual direction' : 'NO - do not call generate_jersey_badge'}.
 The JSON shape must be:
 {
   "jerseyColors": {"COLOUR_BASE":"#hex","COLOUR_PRIMARY":"#hex"},
@@ -372,6 +388,7 @@ The JSON shape must be:
       return {
         ...normalized,
         _actualRegionIds: allowedRegionIds ? Array.from(allowedRegionIds) : Object.keys(normalized.jerseyColors),
+        _generatedAssets: agentResult.generatedAssets,
       };
     } catch (error) {
       this.logger.warn(`Zhipu LangGraph design agent failed, fallback will be used: ${this.getErrorMessage(error)}`);
