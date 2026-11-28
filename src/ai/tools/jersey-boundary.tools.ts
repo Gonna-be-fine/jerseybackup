@@ -23,8 +23,8 @@ export class JerseyBoundaryTools {
 
   /**
    * LangChain-native tools. Zod is the single source of truth for argument
-   * validation; the legacy Gemini declarations remain temporarily for the
-   * old generation path while it is being migrated.
+   * validation. The legacy Gemini declaration adapter remains available for
+   * compatibility, but the LangGraph design agent uses these Zod tools.
    */
   getLangChainTools() {
     const getBoundary = tool(
