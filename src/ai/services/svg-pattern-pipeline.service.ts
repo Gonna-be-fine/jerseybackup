@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { Annotation, END, START, StateGraph } from '@langchain/langgraph';
 import { svgPathBbox } from 'svg-path-bbox';
 import { ZhipuChatModelProvider } from '../../agent/providers/zhipu-chat-model.provider';
@@ -41,7 +41,6 @@ export interface SvgPatternGenerationResult {
 
 @Injectable()
 export class SvgPatternPipelineService {
-  private readonly logger = new Logger(SvgPatternPipelineService.name);
   private graph: any;
 
   constructor(private readonly modelProvider: ZhipuChatModelProvider) {}
@@ -339,6 +338,10 @@ The pattern must have deliberate edge continuity: forms touching one tile edge s
 
   private normalizeHex(value?: string) {
     if (!value) return null;
-    return /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value) ? value : null;
+    if (/^#[0-9a-fA-F]{6}$/.test(value)) return value;
+    if (/^#[0-9a-fA-F]{3}$/.test(value)) {
+      return `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+    }
+    return null;
   }
 }
