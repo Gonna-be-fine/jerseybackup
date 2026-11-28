@@ -34,8 +34,9 @@ describe('JerseyDesignTools', () => {
 
   it('searches the reusable asset library and returns compact metadata', async () => {
     const [searchAssets] = service.getLangChainTools();
+    const searchTool = searchAssets as any;
     const result = JSON.parse(
-      String(await searchAssets.invoke({ keyword: 'falcon', limit: 3 })),
+      String(await searchTool.invoke({ keyword: 'falcon', limit: 3 })),
     );
 
     expect(resources.searchResources).toHaveBeenCalledWith('falcon', 1, 3);
@@ -50,9 +51,10 @@ describe('JerseyDesignTools', () => {
 
   it('generates a badge without returning image bytes to the model', async () => {
     const [, generateBadge] = service.getLangChainTools();
+    const generateBadgeTool = generateBadge as any;
     const result = JSON.parse(
       String(
-        await generateBadge.invoke({
+        await generateBadgeTool.invoke({
           prompt: 'A fierce falcon crest with angular wings',
           aspectRatio: '1:1',
         }),
