@@ -38,7 +38,7 @@ agent (Zhipu GLM + LangChain tools)
                               +------> agent
 ```
 
-The first registered tools inspect the actual SVG boundary and validate candidate image placement. Tool failures are returned to the model as tool messages so it can adjust its next action.
+The registered tools currently cover four operations: inspect the actual SVG boundary, validate candidate image placement, search the reusable SVG decal library, and generate a new raster badge through the configured image provider. Tool failures are returned to the model as tool messages so it can adjust its next action. Binary image data is kept outside the model conversation: the generation tool returns a short asset ID and the backend attaches the image to the design response.
 
 ## Conversation state
 
@@ -52,10 +52,12 @@ After pulling the branch, run `npm install` to install the new LangChain depende
 
 ## Image generation providers
 
-Text-to-image requests (such as standalone badge images) use the provider selected by `IMAGE_GENERATION_PROVIDER`:
+Text-to-image requests (such as standalone badge images and Agent-generated jersey badges) use the provider selected by `IMAGE_GENERATION_PROVIDER`:
 
 - `gemini` (default): uses `GEMINI_API_KEY` and `GEMINI_IMAGE_MODEL`.
 - `comfyui`: submits an API-format workflow to a local or remote ComfyUI server.
+
+The Agent exposes `search_jersey_assets` to reuse existing library artwork before generating new content. The `generate_jersey_badge` tool is only requested when `generateCustomDecal: true` is supplied to the design endpoint.
 
 Example ComfyUI configuration:
 
