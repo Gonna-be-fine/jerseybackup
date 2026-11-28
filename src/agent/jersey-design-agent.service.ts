@@ -15,12 +15,12 @@ import {
 import { JerseyBoundaryTools } from '../ai/tools/jersey-boundary.tools';
 import { ZhipuChatModelProvider } from './providers/zhipu-chat-model.provider';
 
-@Injectable()
 export interface JerseyDesignAgentResult {
   text: string;
   toolResults: Array<{ name?: string; content: string }>;
 }
 
+@Injectable()
 export class JerseyDesignAgent {
   private readonly logger = new Logger(JerseyDesignAgent.name);
   private graph: any;
@@ -75,6 +75,7 @@ export class JerseyDesignAgent {
             return new ToolMessage({
               content: `Tool execution failed: ${message}`,
               tool_call_id: call.id || `${call.name}-${index}`,
+              name: call.name,
               status: 'error',
             });
           }
