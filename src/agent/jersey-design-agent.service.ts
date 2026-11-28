@@ -13,17 +13,24 @@ import {
   StateGraph,
 } from '@langchain/langgraph';
 import { JerseyBoundaryTools } from '../ai/tools/jersey-boundary.tools';
+import { tool } from 'langchain';
 import { ZhipuChatModelProvider } from './providers/zhipu-chat-model.provider';
 
 @Injectable()
 export class JerseyDesignAgent {
   private readonly logger = new Logger(JerseyDesignAgent.name);
-  private readonly graph;
+  private graph: any;
 
   constructor(
     private readonly modelProvider: ZhipuChatModelProvider,
     private readonly boundaryTools: JerseyBoundaryTools,
-  ) {
+  ) {}
+
+  private getGraph() {
+    if (this.graph) {
+      return this.graph;
+    }
+
     const tools = this.boundaryTools.getLangChainTools();
     const toolsByName = new Map(tools.map((item) => [item.name, item]));
     const modelWithTools = this.modelProvider.createChatModel().bindTools(tools);
@@ -44,6 +51,7 @@ export class JerseyDesignAgent {
             return new ToolMessage({
               content: `Tool "${call.name}" is not registered.`,
               tool_call_id: call.id || `${call.name}-${index}`,
+              status: 'error',
             });
           }
 
@@ -87,6 +95,8 @@ export class JerseyDesignAgent {
       // Replace with a durable Postgres checkpointer before multi-instance production.
       checkpointer: new MemorySaver(),
     });
+
+    return this.graph;
   }
 
   async generateDesign(
@@ -94,7 +104,7 @@ export class JerseyDesignAgent {
     userPrompt: string,
     threadId: string,
   ): Promise<string> {
-    const result = await this.graph.invoke(
+    const result = await this.getGraph().invoke(
       {
         messages: [
           new SystemMessage(systemPrompt),
