@@ -16,6 +16,12 @@ export class AiDesignDto {
   @IsBoolean()
   generateCustomDecal?: boolean;
 
+  /** Stable conversation key for continuing a design session. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  conversationId?: string;
+
   @IsOptional()
   @IsString()
   @MaxLength(100)
