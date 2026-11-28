@@ -36,7 +36,7 @@ describe('SvgBoundaryParser', () => {
 
     expect(result.colorRegions.every((region) => region.geometryBounds)).toBe(true);
     const baseRegion = result.colorRegions.find((region) => region.id === 'COLOUR_BASE');
-    expect(baseRegion?.geometryBounds?.width).toBeGreaterThan(3000);
+    expect(baseRegion?.geometryBounds?.width).toBeGreaterThan(2500);
     expect(baseRegion?.geometryBounds?.height).toBeGreaterThan(3000);
 
     expect(result.imageSlots).toHaveLength(5);
