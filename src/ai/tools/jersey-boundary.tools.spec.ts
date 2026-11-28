@@ -23,6 +23,24 @@ describe('JerseyBoundaryTools', () => {
     expect(declarations[1].parameters).toHaveProperty('required');
   });
 
+  it('exposes LangChain tools with Zod argument validation', async () => {
+    const [getBoundary, validatePlacement] = tools.getLangChainTools();
+
+    expect(getBoundary.name).toBe('get_jersey_boundary');
+    expect(validatePlacement.name).toBe('validate_image_placement');
+
+    await expect(
+      validatePlacement.invoke({
+        productType: 'basketball',
+        targetRegion: 'COLOUR_BASE',
+        x: 10,
+        y: 20,
+        width: -1,
+        height: 40,
+      } as any),
+    ).rejects.toBeDefined();
+  });
+
   it('returns a compact boundary summary without raw SVG path data', async () => {
     boundaryService.getBoundary.mockResolvedValue({
       productType: 'basketball',
