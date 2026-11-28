@@ -148,7 +148,7 @@ export class SvgPatternPipelineService {
 Return ONLY one complete raw SVG XML document. Do not use Markdown fences or explanations.
 The tile must be visually repeatable on all four edges and suitable for high-resolution fabric printing.
 Use a 256 by 256 user-space tile with viewBox="0 0 256 256".
-Use vector geometry only: svg, defs, g, path, rect, circle, ellipse, polygon, polyline, line.
+Use vector geometry only: svg, defs, g, path, rect, circle, ellipse, polygon, polyline, line. Do not use transform attributes; write geometry directly in tile coordinates.
 Never use text, images, scripts, CSS stylesheets, filters, masks, foreignObject, animation, or external resources.
 Use no more than 1 foreground color. Every visible fill/stroke must use exactly var(--pattern-color, ${state.patternColor}); use fill="none" for transparent shapes.
 Do not hard-code any other color. This allows the application to recolor the pattern.
@@ -239,7 +239,7 @@ The pattern must have deliberate edge continuity: forms touching one tile edge s
     const allowedAttributes = new Set([
       'xmlns', 'width', 'height', 'viewBox', 'id', 'd', 'x', 'y',
       'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry',
-      'width', 'height', 'points', 'transform', 'fill', 'stroke',
+      'width', 'height', 'points', 'fill', 'stroke',
       'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'fill-rule',
       'opacity', 'fill-opacity', 'stroke-opacity',
     ]);
@@ -269,16 +269,73 @@ The pattern must have deliberate edge continuity: forms touching one tile edge s
       const selfClosing = /\/\s*>$/.test(token);
       const attrText = token.slice(tag.length + 1).replace(/\/?>\s*$/, '');
       const attrPattern = /([^\s=]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+      const attributes: Record<string, string> = {};
       let attrMatch: RegExpExecArray | null;
       while ((attrMatch = attrPattern.exec(attrText))) {
         const name = attrMatch[1];
         const value = attrMatch[2] ?? attrMatch[3] ?? '';
+        attributes[name] = value;
         if (!allowedAttributes.has(name)) {
           issues.push(`Unsupported SVG attribute: ${name}.`);
         }
         if (['fill', 'stroke'].includes(name) && value !== 'none' &&
             !/^var\(--pattern-color,\s*#[0-9a-fA-F]{6}\)$/.test(value)) {
           issues.push(`${name} must use the editable --pattern-color token or none.`);
+        }
+      }
+
+      if (['rect', 'circle', 'ellipse', 'polygon', 'polyline', 'line'].includes(tag)) {
+        const numeric = (name: string, fallback = 0) =>
+          attributes[name] === undefined ? fallback : Number(attributes[name]);
+        let bounds: [number, number, number, number] | null = null;
+
+        if (tag === 'rect') {
+          const x = numeric('x');
+          const y = numeric('y');
+          const width = numeric('width');
+          const height = numeric('height');
+          if (width <= 0 || height <= 0) issues.push('Rect width and height must be positive.');
+          bounds = [x, y, x + width, y + height];
+        } else if (tag === 'circle') {
+          const cx = numeric('cx');
+          const cy = numeric('cy');
+          const radius = numeric('r');
+          if (radius <= 0) issues.push('Circle radius must be positive.');
+          bounds = [cx - radius, cy - radius, cx + radius, cy + radius];
+        } else if (tag === 'ellipse') {
+          const cx = numeric('cx');
+          const cy = numeric('cy');
+          const rx = numeric('rx');
+          const ry = numeric('ry');
+          if (rx <= 0 || ry <= 0) issues.push('Ellipse radii must be positive.');
+          bounds = [cx - rx, cy - ry, cx + rx, cy + ry];
+        } else if (tag === 'line') {
+          const x1 = numeric('x1');
+          const y1 = numeric('y1');
+          const x2 = numeric('x2');
+          const y2 = numeric('y2');
+          bounds = [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)];
+        } else {
+          const rawPoints = attributes.points || '';
+          const values = rawPoints.match(/-?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/g)?.map(Number) || [];
+          if (values.length < 6 || values.length % 2 !== 0 || values.some((value) => !Number.isFinite(value))) {
+            issues.push(`${tag} must contain at least three valid coordinate pairs.`);
+          } else {
+            const xs = values.filter((_value, index) => index % 2 === 0);
+            const ys = values.filter((_value, index) => index % 2 === 1);
+            bounds = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+          }
+        }
+
+        if (bounds) {
+          if (bounds.some((value) => !Number.isFinite(value))) {
+            issues.push(`<${tag}> contains invalid geometry coordinates.`);
+          } else if (
+            bounds[0] < -32 || bounds[1] < -32 ||
+            bounds[2] > TILE_SIZE + 32 || bounds[3] > TILE_SIZE + 32
+          ) {
+            issues.push(`<${tag}> geometry extends more than 32 units beyond the tile.`);
+          }
         }
       }
       if (!selfClosing) stack.push(tag);
